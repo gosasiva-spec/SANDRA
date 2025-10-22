@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { View } from '../App';
 import { ICONS } from '../constants';
@@ -9,10 +8,10 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
-  const navItems: View[] = ['Panel', 'Materiales', 'Mano de Obra', 'Presupuesto', 'Cronograma', 'Bitácora de Fotos'];
+  const navItems: View[] = ['Panel', 'Materiales', 'Mano de Obra', 'Presupuesto', 'Cronograma', 'Bitácora de Fotos', 'Reportes'];
 
   return (
-    <div className="flex flex-col w-64 bg-white shadow-lg">
+    <div className="flex flex-col w-64 bg-white shadow-lg no-print">
       <div className="flex items-center justify-center h-20 border-b">
         <h1 className="text-2xl font-bold text-primary-700">ConstructPro</h1>
       </div>

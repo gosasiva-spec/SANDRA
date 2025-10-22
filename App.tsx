@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -7,8 +6,9 @@ import Labor from './components/Labor';
 import Budget from './components/Budget';
 import Schedule from './components/Schedule';
 import PhotoLog from './components/PhotoLog';
+import Reports from './components/Reports';
 
-export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Cronograma' | 'Bitácora de Fotos';
+export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Cronograma' | 'Bitácora de Fotos' | 'Reportes';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('Panel');
@@ -27,6 +27,8 @@ const App: React.FC = () => {
         return <Schedule />;
       case 'Bitácora de Fotos':
         return <PhotoLog />;
+      case 'Reportes':
+        return <Reports />;
       default:
         return <Dashboard />;
     }
