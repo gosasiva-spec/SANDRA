@@ -7,6 +7,7 @@ export interface Material {
   unit: string;
   unitCost: number;
   criticalStockLevel: number;
+  location?: string;
 }
 
 export interface MaterialOrder {
@@ -44,7 +45,7 @@ export interface TimeLog {
 
 export interface BudgetCategory {
     id: string;
-    name: 'Materiales' | 'Mano de Obra' | 'Permisos' | 'Equipamiento' | 'Otros';
+    name: string;
     allocated: number;
 }
 

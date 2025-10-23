@@ -39,8 +39,8 @@ const Schedule: React.FC = () => {
             case 'Completado': return 'bg-green-500';
             case 'En Progreso': return 'bg-blue-500';
             case 'Retrasado': return 'bg-red-500';
-            case 'No Iniciado': return 'bg-gray-400';
-            default: return 'bg-gray-400';
+            case 'No Iniciado': return 'bg-gray-500';
+            default: return 'bg-gray-500';
         }
     };
     
@@ -56,7 +56,7 @@ const Schedule: React.FC = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-semibold text-gray-800">Cronograma del Proyecto</h2>
+                <h2 className="text-3xl font-semibold text-black">Cronograma del Proyecto</h2>
                 <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
                     Añadir Tarea
                 </button>
@@ -68,9 +68,9 @@ const Schedule: React.FC = () => {
                         <div key={task.id} className="p-4 border rounded-lg hover:shadow-lg transition-shadow">
                            <div className="flex justify-between items-start">
                                 <div>
-                                    <h4 className="font-bold text-lg text-gray-800">{task.name}</h4>
-                                    <p className="text-sm text-gray-600">{task.description}</p>
-                                    <p className="text-xs text-gray-500 mt-1">
+                                    <h4 className="font-bold text-lg text-black">{task.name}</h4>
+                                    <p className="text-sm text-black">{task.description}</p>
+                                    <p className="text-xs text-black mt-1">
                                         Asignado a: {workers.find(w => w.id === task.assignedWorkerId)?.name || 'Sin asignar'}
                                     </p>
                                 </div>
@@ -78,8 +78,8 @@ const Schedule: React.FC = () => {
                                      <span className={`px-3 py-1 text-sm font-semibold text-white rounded-full ${getStatusColor(task.status)}`}>
                                         {task.status}
                                     </span>
-                                    <p className="text-sm text-gray-500 mt-1">{new Date(task.startDate).toLocaleDateString()} - {new Date(task.endDate).toLocaleDateString()}</p>
-                                     <button onClick={() => handleOpenModal(task)} className="text-sm text-primary-600 hover:text-primary-800 mt-1">Editar</button>
+                                    <p className="text-sm text-black mt-1">{new Date(task.startDate).toLocaleDateString()} - {new Date(task.endDate).toLocaleDateString()}</p>
+                                     <button onClick={() => handleOpenModal(task)} className="text-sm text-black hover:text-gray-600 mt-1">Editar</button>
                                 </div>
                            </div>
                            <div className="mt-3">
@@ -92,17 +92,17 @@ const Schedule: React.FC = () => {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? 'Editar Tarea' : 'Añadir Nueva Tarea'}>
                 <div className="space-y-4">
-                    <input type="text" placeholder="Nombre de la Tarea" value={currentTask.name || ''} onChange={e => setCurrentTask({...currentTask, name: e.target.value})} className="w-full p-2 border rounded" />
-                    <input type="text" placeholder="Descripción" value={currentTask.description || ''} onChange={e => setCurrentTask({...currentTask, description: e.target.value})} className="w-full p-2 border rounded" />
-                    <label>Fecha de Inicio</label>
-                    <input type="date" value={currentTask.startDate || ''} onChange={e => setCurrentTask({...currentTask, startDate: e.target.value})} className="w-full p-2 border rounded" />
-                    <label>Fecha de Fin</label>
-                    <input type="date" value={currentTask.endDate || ''} onChange={e => setCurrentTask({...currentTask, endDate: e.target.value})} className="w-full p-2 border rounded" />
-                    <select value={currentTask.assignedWorkerId || ''} onChange={e => setCurrentTask({...currentTask, assignedWorkerId: e.target.value})} className="w-full p-2 border rounded">
+                    <input type="text" placeholder="Nombre de la Tarea" value={currentTask.name || ''} onChange={e => setCurrentTask({...currentTask, name: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <input type="text" placeholder="Descripción" value={currentTask.description || ''} onChange={e => setCurrentTask({...currentTask, description: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <label className="text-black block text-sm font-medium">Fecha de Inicio</label>
+                    <input type="date" value={currentTask.startDate || ''} onChange={e => setCurrentTask({...currentTask, startDate: e.target.value})} className="w-full p-2 border rounded bg-white text-black" />
+                    <label className="text-black block text-sm font-medium">Fecha de Fin</label>
+                    <input type="date" value={currentTask.endDate || ''} onChange={e => setCurrentTask({...currentTask, endDate: e.target.value})} className="w-full p-2 border rounded bg-white text-black" />
+                    <select value={currentTask.assignedWorkerId || ''} onChange={e => setCurrentTask({...currentTask, assignedWorkerId: e.target.value})} className="w-full p-2 border rounded bg-white text-black">
                         <option value="">Asignar Trabajador</option>
                         {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
-                    <select value={currentTask.status || ''} onChange={e => setCurrentTask({...currentTask, status: e.target.value as Task['status']})} className="w-full p-2 border rounded">
+                    <select value={currentTask.status || ''} onChange={e => setCurrentTask({...currentTask, status: e.target.value as Task['status']})} className="w-full p-2 border rounded bg-white text-black">
                         <option>No Iniciado</option>
                         <option>En Progreso</option>
                         <option>Completado</option>

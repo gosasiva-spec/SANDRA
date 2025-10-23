@@ -1,5 +1,5 @@
-
-import { useState, useEffect } from 'react';
+// FIX: Add React to the import statement to bring the React namespace into scope.
+import React, { useState, useEffect } from 'react';
 
 function useLocalStorage<T,>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [storedValue, setStoredValue] = useState<T>(() => {

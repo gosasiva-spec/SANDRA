@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialMaterials, initialMaterialOrders, initialWorkers, initialTasks, initialTimeLogs, initialBudgetCategories, initialExpenses } from '../constants';
@@ -19,9 +20,9 @@ const Reports: React.FC = () => {
 
     const generateReportHeader = (title: string) => (
         <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">ConstructPro Gerente</h2>
-            <h3 className="text-xl font-semibold text-gray-700">{title}</h3>
-            <p className="text-sm text-gray-500">Generado el: {new Date().toLocaleString()}</p>
+            <h2 className="text-2xl font-bold text-black">ConstructPro Gerente</h2>
+            <h3 className="text-xl font-semibold text-black">{title}</h3>
+            <p className="text-sm text-black">Generado el: {new Date().toLocaleString()}</p>
         </div>
     );
 
@@ -33,16 +34,16 @@ const Reports: React.FC = () => {
                 {generateReportHeader("Reporte de Presupuesto")}
                 <div className="grid grid-cols-3 gap-4 mb-6 text-center">
                     <div className="p-4 bg-gray-100 rounded-lg">
-                        <p className="text-sm text-gray-600">Total Asignado</p>
+                        <p className="text-sm text-black">Total Asignado</p>
                         <p className="text-2xl font-bold">${totalAllocated.toLocaleString()}</p>
                     </div>
                     <div className="p-4 bg-red-100 rounded-lg">
-                        <p className="text-sm text-red-600">Total Gastado</p>
-                        <p className="text-2xl font-bold text-red-800">${totalSpent.toLocaleString()}</p>
+                        <p className="text-sm text-black">Total Gastado</p>
+                        <p className="text-2xl font-bold text-black">${totalSpent.toLocaleString()}</p>
                     </div>
                     <div className="p-4 bg-green-100 rounded-lg">
-                        <p className="text-sm text-green-600">Restante</p>
-                        <p className="text-2xl font-bold text-green-800">${(totalAllocated - totalSpent).toLocaleString()}</p>
+                        <p className="text-sm text-black">Restante</p>
+                        <p className="text-2xl font-bold text-black">${(totalAllocated - totalSpent).toLocaleString()}</p>
                     </div>
                 </div>
                 <h4 className="text-lg font-semibold mb-2">Gastos por Categoría</h4>
@@ -72,7 +73,12 @@ const Reports: React.FC = () => {
                                 <td className="p-2">{mat.name}</td>
                                 <td className="p-2">{mat.quantity} {mat.unit}</td>
                                 <td className="p-2">{mat.criticalStockLevel} {mat.unit}</td>
-                                <td className="p-2">{mat.quantity <= mat.criticalStockLevel ? <span className="text-red-600 font-bold">Bajo Stock</span> : 'En Stock'}</td>
+                                <td className="p-2">
+                                    {mat.quantity <= mat.criticalStockLevel ? 
+                                        (<span className="px-2 py-1 text-xs font-semibold text-white bg-red-500 rounded-full">Bajo Stock</span>) :
+                                        (<span className="px-2 py-1 text-xs font-semibold text-white bg-green-500 rounded-full">En Stock</span>)
+                                    }
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -83,7 +89,16 @@ const Reports: React.FC = () => {
                     <tbody>
                         {orders.map(order => {
                             const material = materials.find(m => m.id === order.materialId);
-                            return (<tr key={order.id} className="border-b"><td className="p-2">{material?.name}</td><td className="p-2">{order.quantity}</td><td className="p-2">{new Date(order.orderDate).toLocaleDateString()}</td><td className="p-2">{order.status}</td></tr>)
+                            return (<tr key={order.id} className="border-b"><td className="p-2">{material?.name}</td><td className="p-2">{order.quantity}</td><td className="p-2">{new Date(order.orderDate).toLocaleDateString()}</td><td className="p-2">
+                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                    order.status === 'Entregado' ? 'bg-green-500 text-white' :
+                                    order.status === 'Enviado' ? 'bg-blue-500 text-white' :
+                                    order.status === 'Pendiente' ? 'bg-yellow-400 text-black' :
+                                    order.status === 'Cancelado' ? 'bg-gray-500 text-white' : ''
+                                }`}>
+                                    {order.status}
+                                </span>
+                            </td></tr>)
                         })}
                     </tbody>
                  </table>
@@ -122,6 +137,17 @@ const Reports: React.FC = () => {
             acc[task.status] = (acc[task.status] || 0) + 1;
             return acc;
         }, {} as Record<Task['status'], number>);
+        
+        const getTaskStatusClass = (status: Task['status']) => {
+            switch (status) {
+                case 'Completado': return 'bg-green-500 text-white';
+                case 'En Progreso': return 'bg-blue-500 text-white';
+                case 'Retrasado': return 'bg-red-500 text-white';
+                case 'No Iniciado': return 'bg-gray-500 text-white';
+                default: return 'bg-gray-500 text-white';
+            }
+        };
+
         return (
             <div>
                  {generateReportHeader("Reporte de Progreso del Proyecto")}
@@ -140,7 +166,11 @@ const Reports: React.FC = () => {
                                 <td className="p-2">{task.name}</td>
                                 <td className="p-2">{workers.find(w => w.id === task.assignedWorkerId)?.name || 'N/A'}</td>
                                 <td className="p-2">{new Date(task.startDate).toLocaleDateString()} - {new Date(task.endDate).toLocaleDateString()}</td>
-                                <td className="p-2">{task.status}</td>
+                                <td className="p-2">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getTaskStatusClass(task.status)}`}>
+                                        {task.status}
+                                    </span>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -178,12 +208,12 @@ const Reports: React.FC = () => {
     
     return (
         <div>
-            <h2 className="text-3xl font-semibold text-gray-800 mb-6">Generación de Reportes</h2>
+            <h2 className="text-3xl font-semibold text-black mb-6">Generación de Reportes</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {reportOptions.map(opt => (
                     <Card key={opt.key}>
-                        <h3 className="text-xl font-semibold text-gray-800 mb-2">{opt.title}</h3>
-                        <p className="text-gray-600 mb-4">{opt.description}</p>
+                        <h3 className="text-xl font-semibold text-black mb-2">{opt.title}</h3>
+                        <p className="text-black mb-4">{opt.description}</p>
                         <button 
                             onClick={() => setReportType(opt.key)} 
                             className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors w-full sm:w-auto"
@@ -199,7 +229,7 @@ const Reports: React.FC = () => {
                     {getReportContent()}
                 </div>
                 <div className="mt-6 flex justify-end gap-3 no-print">
-                    <button onClick={() => setReportType(null)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cerrar</button>
+                    <button onClick={() => setReportType(null)} className="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300">Cerrar</button>
                     <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Imprimir</button>
                 </div>
             </Modal>

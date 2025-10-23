@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface ProgressBarProps {
@@ -18,7 +17,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ value, color = 'blue', classN
   const safeValue = Math.max(0, Math.min(100, value));
 
   return (
-    <div className={`w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 ${className}`}>
+    <div className={`w-full bg-gray-200 rounded-full h-2.5 ${className}`}>
       <div
         className={`h-2.5 rounded-full ${colorClasses[color]}`}
         style={{ width: `${safeValue}%` }}

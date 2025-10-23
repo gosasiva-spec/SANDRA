@@ -43,7 +43,7 @@ const Labor: React.FC = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-semibold text-gray-800">Gestión de Mano de Obra</h2>
+                <h2 className="text-3xl font-semibold text-black">Gestión de Mano de Obra</h2>
                 <div>
                     <button onClick={() => setIsTimeLogModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors mr-2">
                         Registrar Horas
@@ -55,7 +55,7 @@ const Labor: React.FC = () => {
             </div>
 
             <Card className="mb-8">
-                <h3 className="text-xl font-semibold text-gray-700 mb-4">Trabajadores</h3>
+                <h3 className="text-xl font-semibold text-black mb-4">Trabajadores</h3>
                 <table className="w-full text-left">
                     <thead>
                         <tr className="border-b bg-gray-50">
@@ -101,25 +101,25 @@ const Labor: React.FC = () => {
 
             <Modal isOpen={isWorkerModalOpen} onClose={() => setIsWorkerModalOpen(false)} title="Añadir/Editar Trabajador">
                 <div className="space-y-4">
-                    <input type="text" placeholder="Nombre" value={currentWorker.name || ''} onChange={e => setCurrentWorker({...currentWorker, name: e.target.value})} className="w-full p-2 border rounded" />
-                    <input type="text" placeholder="Cargo" value={currentWorker.role || ''} onChange={e => setCurrentWorker({...currentWorker, role: e.target.value})} className="w-full p-2 border rounded" />
-                    <input type="number" placeholder="Tarifa por Hora" value={currentWorker.hourlyRate || ''} onChange={e => setCurrentWorker({...currentWorker, hourlyRate: parseFloat(e.target.value)})} className="w-full p-2 border rounded" />
+                    <input type="text" placeholder="Nombre" value={currentWorker.name || ''} onChange={e => setCurrentWorker({...currentWorker, name: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <input type="text" placeholder="Cargo" value={currentWorker.role || ''} onChange={e => setCurrentWorker({...currentWorker, role: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <input type="number" placeholder="Tarifa por Hora" value={currentWorker.hourlyRate || ''} onChange={e => setCurrentWorker({...currentWorker, hourlyRate: parseFloat(e.target.value)})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
                     <button onClick={handleSaveWorker} className="w-full py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Guardar Trabajador</button>
                 </div>
             </Modal>
             
             <Modal isOpen={isTimeLogModalOpen} onClose={() => setIsTimeLogModalOpen(false)} title="Registrar Horas Trabajadas">
                  <div className="space-y-4">
-                    <select value={newTimeLog.workerId || ''} onChange={e => setNewTimeLog({...newTimeLog, workerId: e.target.value})} className="w-full p-2 border rounded">
+                    <select value={newTimeLog.workerId || ''} onChange={e => setNewTimeLog({...newTimeLog, workerId: e.target.value})} className="w-full p-2 border rounded bg-white text-black">
                         <option value="">Seleccionar Trabajador</option>
                         {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
-                    <select value={newTimeLog.taskId || ''} onChange={e => setNewTimeLog({...newTimeLog, taskId: e.target.value})} className="w-full p-2 border rounded">
+                    <select value={newTimeLog.taskId || ''} onChange={e => setNewTimeLog({...newTimeLog, taskId: e.target.value})} className="w-full p-2 border rounded bg-white text-black">
                         <option value="">Seleccionar Tarea</option>
                         {tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <input type="date" value={newTimeLog.date || ''} onChange={e => setNewTimeLog({...newTimeLog, date: e.target.value})} className="w-full p-2 border rounded" />
-                    <input type="number" placeholder="Horas Trabajadas" value={newTimeLog.hours || ''} onChange={e => setNewTimeLog({...newTimeLog, hours: parseFloat(e.target.value)})} className="w-full p-2 border rounded" />
+                    <input type="date" value={newTimeLog.date || ''} onChange={e => setNewTimeLog({...newTimeLog, date: e.target.value})} className="w-full p-2 border rounded bg-white text-black" />
+                    <input type="number" placeholder="Horas Trabajadas" value={newTimeLog.hours || ''} onChange={e => setNewTimeLog({...newTimeLog, hours: parseFloat(e.target.value)})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
                     <button onClick={handleSaveTimeLog} className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700">Registrar Horas</button>
                  </div>
             </Modal>

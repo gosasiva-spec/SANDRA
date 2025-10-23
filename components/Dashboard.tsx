@@ -31,24 +31,24 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-3xl font-semibold text-gray-800 mb-6">Panel del Proyecto</h2>
+      <h2 className="text-3xl font-semibold text-black mb-6">Panel del Proyecto</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <Card>
-          <h4 className="text-gray-500 font-medium">Presupuesto Total</h4>
-          <p className="text-3xl font-bold text-gray-800">${totalBudget.toLocaleString()}</p>
+          <h4 className="font-medium text-black">Presupuesto Total</h4>
+          <p className="text-3xl font-bold text-black">${totalBudget.toLocaleString()}</p>
         </Card>
         <Card>
-          <h4 className="text-gray-500 font-medium">Monto Gastado</h4>
-          <p className="text-3xl font-bold text-red-500">${totalSpent.toLocaleString()}</p>
+          <h4 className="font-medium text-black">Monto Gastado</h4>
+          <p className="text-3xl font-bold text-black">${totalSpent.toLocaleString()}</p>
         </Card>
         <Card>
-          <h4 className="text-gray-500 font-medium">Progreso del Proyecto</h4>
-          <p className="text-3xl font-bold text-green-500">{projectProgress.toFixed(0)}%</p>
+          <h4 className="font-medium text-black">Progreso del Proyecto</h4>
+          <p className="text-3xl font-bold text-black">{projectProgress.toFixed(0)}%</p>
         </Card>
         <Card>
-          <h4 className="text-gray-500 font-medium">Artículos con Stock Bajo</h4>
-          <p className="text-3xl font-bold text-yellow-500">{lowStockItems.length}</p>
+          <h4 className="font-medium text-black">Artículos con Stock Bajo</h4>
+          <p className="text-3xl font-bold text-black">{lowStockItems.length}</p>
         </Card>
       </div>
 
@@ -56,8 +56,8 @@ const Dashboard: React.FC = () => {
         <Card title="Resumen del Presupuesto">
            <div className="mb-4">
              <div className="flex justify-between mb-1">
-                <span className="text-base font-medium text-blue-700">Progreso del Presupuesto</span>
-                <span className="text-sm font-medium text-blue-700">{budgetProgress.toFixed(1)}%</span>
+                <span className="text-base font-medium text-black">Progreso del Presupuesto</span>
+                <span className="text-sm font-medium text-black">{budgetProgress.toFixed(1)}%</span>
             </div>
             <ProgressBar value={budgetProgress} color={budgetProgress > 90 ? 'red' : budgetProgress > 75 ? 'yellow' : 'blue'} />
            </div>
@@ -80,8 +80,8 @@ const Dashboard: React.FC = () => {
           <ul className="space-y-3">
             {tasks.filter(t => t.status !== 'Completado').slice(0, 5).map(task => (
               <li key={task.id} className="p-3 bg-gray-50 rounded-md">
-                <p className="font-semibold text-gray-700">{task.name}</p>
-                <p className="text-sm text-gray-500">Vence: {new Date(task.endDate).toLocaleDateString()}</p>
+                <p className="font-semibold text-black">{task.name}</p>
+                <p className="text-sm text-black">Vence: {new Date(task.endDate).toLocaleDateString()}</p>
               </li>
             ))}
           </ul>
