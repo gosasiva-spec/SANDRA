@@ -20,6 +20,111 @@ const Reports: React.FC = () => {
     const [budgetCategories] = useLocalStorage<BudgetCategory[]>('budgetCategories', initialBudgetCategories);
     const [expenses] = useLocalStorage<Expense[]>('expenses', initialExpenses);
 
+    const getTaskProgress = (task: Task) => {
+        if (task.totalVolume && task.totalVolume > 0) {
+            return Math.min(100, ((task.completedVolume || 0) / task.totalVolume) * 100);
+        }
+        if (task.status === 'Completado') return 100;
+        if (task.status === 'No Iniciado') return 0;
+        const totalDuration = new Date(task.endDate).getTime() - new Date(task.startDate).getTime();
+        if (totalDuration <= 0) return 0;
+        const elapsedDuration = new Date().getTime() - new Date(task.startDate).getTime();
+        if (elapsedDuration <= 0) return 0;
+        return Math.min(100, (elapsedDuration / totalDuration) * 100);
+    };
+
+    const exportToCsv = (filename: string, rows: (string | number | undefined)[][]) => {
+        const processRow = (row: (string | number | undefined)[]) => row.map(val => {
+            const str = String(val == null ? '' : val);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        }).join(',');
+
+        const csvContent = rows.map(processRow).join('\n');
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
+    const handleExportExcel = () => {
+        if (!reportType) return;
+        const sortedTasks = [...tasks].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+        switch (reportType) {
+            case 'budget': {
+                const data: (string | number)[][] = [];
+                data.push(['Resumen de Presupuesto por Categoría']);
+                data.push(['Categoría', 'Asignado', 'Gastado', 'Restante']);
+                budgetCategories.forEach(cat => {
+                    const spent = expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
+                    data.push([cat.name, cat.allocated, spent, cat.allocated - spent]);
+                });
+                data.push([]); 
+                data.push(['Detalle de Gastos']);
+                data.push(['Fecha', 'Descripción', 'Categoría', 'Monto']);
+                expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).forEach(exp => {
+                    const categoryName = budgetCategories.find(c => c.id === exp.categoryId)?.name || 'N/A';
+                    data.push([new Date(exp.date).toLocaleDateString(), exp.description, categoryName, exp.amount]);
+                });
+                exportToCsv('reporte_presupuesto.csv', data);
+                break;
+            }
+            case 'materials': {
+                const data: (string | number)[][] = [];
+                data.push(['Resumen de Inventario']);
+                data.push(['Material', 'Cantidad Actual', 'Unidad', 'Nivel Crítico', 'Estado']);
+                materials.forEach(mat => {
+                    const status = mat.quantity <= mat.criticalStockLevel ? 'Bajo Stock' : 'En Stock';
+                    data.push([mat.name, mat.quantity, mat.unit, mat.criticalStockLevel, status]);
+                });
+                data.push([]);
+                data.push(['Pedidos de Materiales']);
+                data.push(['Material', 'Cantidad', 'Fecha de Pedido', 'Estado']);
+                orders.forEach(order => {
+                    const materialName = materials.find(m => m.id === order.materialId)?.name || 'N/A';
+                    data.push([materialName, order.quantity, new Date(order.orderDate).toLocaleDateString(), order.status]);
+                });
+                exportToCsv('reporte_materiales.csv', data);
+                break;
+            }
+            case 'labor': {
+                const data: (string | number)[][] = [];
+                data.push(['Resumen de Costos por Trabajador']);
+                data.push(['Trabajador', 'Cargo', 'Tarifa por Hora', 'Horas Totales', 'Costo Total']);
+                workers.forEach(worker => {
+                    const totalHours = timeLogs.filter(log => log.workerId === worker.id).reduce((acc, log) => acc + log.hours, 0);
+                    const totalCost = totalHours * worker.hourlyRate;
+                    data.push([worker.name, worker.role, worker.hourlyRate, totalHours, totalCost.toFixed(2)]);
+                });
+                exportToCsv('reporte_mano_de_obra.csv', data);
+                break;
+            }
+            case 'progress': {
+                const data: (string | number | undefined)[][] = [];
+                data.push(['Cronograma de Tareas del Proyecto']);
+                data.push(['Tarea', 'Descripción', 'Asignado a', 'Fecha de Inicio', 'Fecha de Fin', 'Fecha de Finalización', 'Estado', 'Progreso (%)']);
+                sortedTasks.forEach(task => {
+                    const workerName = workers.find(w => w.id === task.assignedWorkerId)?.name || 'Sin asignar';
+                    const progress = getTaskProgress(task);
+                    data.push([task.name, task.description, workerName, task.startDate, task.endDate, task.completionDate, task.status, progress.toFixed(1)]);
+                });
+                exportToCsv('reporte_progreso.csv', data);
+                break;
+            }
+        }
+    };
+
+
     const generateReportHeader = (title: string) => (
         <div className="mb-6">
             <h2 className="text-2xl font-bold text-black">ConstructPro Gerente</h2>
@@ -140,19 +245,6 @@ const Reports: React.FC = () => {
             return acc;
         }, {} as Record<Task['status'], number>);
         
-        const getTaskProgress = (task: Task) => {
-            if (task.totalVolume && task.totalVolume > 0) {
-                return Math.min(100, ((task.completedVolume || 0) / task.totalVolume) * 100);
-            }
-            if (task.status === 'Completado') return 100;
-            if (task.status === 'No Iniciado') return 0;
-            const totalDuration = new Date(task.endDate).getTime() - new Date(task.startDate).getTime();
-            if (totalDuration <= 0) return 0;
-            const elapsedDuration = new Date().getTime() - new Date(task.startDate).getTime();
-            if (elapsedDuration <= 0) return 0;
-            return Math.min(100, (elapsedDuration / totalDuration) * 100);
-        };
-    
         const sortedTasks = [...tasks].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
         
         if (tasks.length === 0) {
@@ -287,12 +379,13 @@ const Reports: React.FC = () => {
             </div>
 
             <Modal isOpen={!!reportType} onClose={() => setReportType(null)} title={getReportTitle()}>
-                <div className="printable-area">
+                <div className="printable-area max-h-[70vh] overflow-y-auto p-2">
                     {getReportContent()}
                 </div>
-                <div className="mt-6 flex justify-end gap-3 no-print">
+                <div className="mt-6 flex flex-wrap justify-end gap-3 no-print">
                     <button onClick={() => setReportType(null)} className="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300">Cerrar</button>
-                    <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Imprimir</button>
+                    <button onClick={handleExportExcel} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Exportar a Excel</button>
+                    <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Imprimir / PDF</button>
                 </div>
             </Modal>
         </div>
