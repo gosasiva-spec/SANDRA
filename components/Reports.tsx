@@ -113,11 +113,12 @@ const Reports: React.FC = () => {
             case 'progress': {
                 const data: (string | number | undefined)[][] = [];
                 data.push(['Cronograma de Tareas del Proyecto']);
-                data.push(['Tarea', 'Descripción', 'Asignado a', 'Fecha de Inicio', 'Fecha de Fin', 'Fecha de Finalización', 'Estado', 'Progreso (%)']);
+                data.push(['Tarea', 'Descripción', 'Asignado a', 'Fecha de Inicio', 'Fecha de Fin', 'Fecha de Finalización', 'Estado', 'Progreso (%)', 'IDs de Fotos']);
                 sortedTasks.forEach(task => {
                     const workerName = workers.find(w => w.id === task.assignedWorkerId)?.name || 'Sin asignar';
                     const progress = getTaskProgress(task);
-                    data.push([task.name, task.description, workerName, task.startDate, task.endDate, task.completionDate, task.status, progress.toFixed(1)]);
+                    const photoIds = task.photoIds ? task.photoIds.join('; ') : '';
+                    data.push([task.name, task.description, workerName, task.startDate, task.endDate, task.completionDate, task.status, progress.toFixed(1), photoIds]);
                 });
                 exportToCsv('reporte_progreso.csv', data);
                 break;
@@ -263,6 +264,7 @@ const Reports: React.FC = () => {
         }, {} as Record<Task['status'], number>);
         
         const sortedTasks = [...tasks].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+        const tasksWithPhotos = sortedTasks.filter(task => task.photoIds && task.photoIds.length > 0);
         
         if (tasks.length === 0) {
             return (
@@ -295,8 +297,6 @@ const Reports: React.FC = () => {
             };
         });
     
-        const domainEnd = Math.max(...sortedTasks.map(t => new Date(t.endDate).getTime())) - projectStartDate;
-    
         const tickFormatter = (tick: number) => {
           const date = new Date(projectStartDate + tick);
           return date.toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
@@ -327,7 +327,7 @@ const Reports: React.FC = () => {
                     <div className="p-2 bg-red-100 rounded-lg"><p className="text-sm">Retrasadas</p><p className="text-xl font-bold">{tasksByStatus['Retrasado'] || 0}</p></div>
                  </div>
                  <h4 className="text-lg font-semibold my-4">Cronograma de Tareas</h4>
-                 <div style={{ width: '100%', height: 35 * sortedTasks.length + 60, minHeight: 250 }}>
+                 <div style={{ width: '100%', height: 35 * sortedTasks.length + 60, minHeight: 250 }} className="break-inside-avoid">
                      <ResponsiveContainer>
                          <BarChart
                              layout="vertical"
@@ -346,6 +346,31 @@ const Reports: React.FC = () => {
                          </BarChart>
                      </ResponsiveContainer>
                  </div>
+
+                 {tasksWithPhotos.length > 0 && (
+                    <div className="mt-8 pt-4 border-t" style={{ pageBreakBefore: 'always' }}>
+                        <h4 className="text-lg font-semibold mb-4">Registro Fotográfico de Tareas</h4>
+                        <div className="space-y-6">
+                            {tasksWithPhotos.map(task => {
+                                const attachedPhotos = photos.filter(p => task.photoIds!.includes(p.id));
+                                return (
+                                    <div key={task.id} className="break-inside-avoid">
+                                        <h5 className="font-bold text-black text-md mb-2">{task.name}</h5>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {attachedPhotos.map(photo => (
+                                                <div key={photo.id} className="border rounded-lg p-2">
+                                                    <img src={photo.url} alt={photo.description} className="w-full h-40 object-cover rounded-md mb-2" />
+                                                    <p className="text-sm text-black">{photo.description}</p>
+                                                    <p className="text-xs text-black">Subido: {new Date(photo.uploadDate).toLocaleDateString()}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                 )}
             </div>
         )
     };
@@ -424,7 +449,7 @@ const Reports: React.FC = () => {
             </div>
 
             <Modal isOpen={!!reportType} onClose={() => setReportType(null)} title={getReportTitle()}>
-                <div className="printable-area max-h-[70vh] overflow-y-auto p-2 print:max-h-none print:overflow-visible">
+                <div className="printable-area max-h-[70vh] overflow-y-auto p-2 print:max-h-none print:overflow-visible print:overflow-y-visible">
                     {getReportContent()}
                 </div>
                 <div className="mt-6 flex flex-wrap justify-end gap-3 no-print">
