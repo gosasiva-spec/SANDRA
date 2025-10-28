@@ -37,8 +37,8 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
       <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100">
+      <div className="flex-1 flex flex-col overflow-hidden print:overflow-visible">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 print:overflow-visible">
           <div className="container mx-auto px-6 py-8">
             {renderView()}
           </div>

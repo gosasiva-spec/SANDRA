@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { initialMaterials, initialMaterialOrders, initialWorkers, initialTasks, initialTimeLogs, initialBudgetCategories, initialExpenses } from '../constants';
-import { Material, MaterialOrder, Worker, Task, TimeLog, BudgetCategory, Expense } from '../types';
+import { initialMaterials, initialMaterialOrders, initialWorkers, initialTasks, initialTimeLogs, initialBudgetCategories, initialExpenses, initialPhotos } from '../constants';
+import { Material, MaterialOrder, Worker, Task, TimeLog, BudgetCategory, Expense, Photo } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -19,6 +18,8 @@ const Reports: React.FC = () => {
     const [timeLogs] = useLocalStorage<TimeLog[]>('timeLogs', initialTimeLogs);
     const [budgetCategories] = useLocalStorage<BudgetCategory[]>('budgetCategories', initialBudgetCategories);
     const [expenses] = useLocalStorage<Expense[]>('expenses', initialExpenses);
+    const [photos] = useLocalStorage<Photo[]>('photos', initialPhotos);
+
 
     const getTaskProgress = (task: Task) => {
         if (task.totalVolume && task.totalVolume > 0) {
@@ -119,6 +120,22 @@ const Reports: React.FC = () => {
                     data.push([task.name, task.description, workerName, task.startDate, task.endDate, task.completionDate, task.status, progress.toFixed(1)]);
                 });
                 exportToCsv('reporte_progreso.csv', data);
+                break;
+            }
+            case 'photos': {
+                const data: (string | number | undefined)[][] = [];
+                data.push(['Reporte de Bitácora de Fotos']);
+                data.push(['ID', 'Descripción', 'Fecha de Subida', 'Etiquetas', 'URL de la Imagen (Base64)']);
+                photos.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).forEach(photo => {
+                    data.push([
+                        photo.id,
+                        photo.description,
+                        new Date(photo.uploadDate).toLocaleString(),
+                        photo.tags.join(', '),
+                        photo.url
+                    ]);
+                });
+                exportToCsv('reporte_fotos.csv', data);
                 break;
             }
         }
@@ -333,12 +350,38 @@ const Reports: React.FC = () => {
         )
     };
 
+    const renderPhotoLogReport = () => {
+        const sortedPhotos = [...photos].sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+        return (
+            <div>
+                {generateReportHeader("Reporte de Bitácora de Fotos")}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {sortedPhotos.map(photo => (
+                        <div key={photo.id} className="border rounded-lg p-3 break-inside-avoid">
+                            <img src={photo.url} alt={photo.description} className="w-full h-48 object-cover rounded-md mb-2" />
+                            <h5 className="font-bold text-black">{photo.description}</h5>
+                            <p className="text-xs text-black">Subido el: {new Date(photo.uploadDate).toLocaleString()}</p>
+                            {photo.tags.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                    {photo.tags.map(tag => (
+                                        <span key={tag} className="px-2 py-0.5 bg-blue-100 text-black text-xs font-semibold rounded-full">{tag}</span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
     const getReportContent = () => {
         switch (reportType) {
             case 'budget': return renderBudgetReport();
             case 'materials': return renderMaterialsReport();
             case 'labor': return renderLaborReport();
             case 'progress': return renderProgressReport();
+            case 'photos': return renderPhotoLogReport();
             default: return null;
         }
     };
@@ -349,6 +392,7 @@ const Reports: React.FC = () => {
             case 'materials': return "Reporte de Materiales";
             case 'labor': return "Reporte de Mano de Obra";
             case 'progress': return "Reporte de Progreso";
+            case 'photos': return "Reporte de Bitácora de Fotos";
             default: return "Reporte";
         }
     };
@@ -358,6 +402,7 @@ const Reports: React.FC = () => {
         { key: 'materials', title: 'Reporte de Materiales', description: 'Estado del inventario, artículos con stock bajo y pedidos.' },
         { key: 'labor', title: 'Reporte de Mano de Obra', description: 'Horas trabajadas y costos laborales por trabajador.' },
         { key: 'progress', title: 'Reporte de Progreso', description: 'Estado de las tareas, cronograma y progreso general.' },
+        { key: 'photos', title: 'Reporte de Bitácora de Fotos', description: 'Galería de todas las fotos del proyecto con sus detalles.' },
     ];
     
     return (
@@ -379,7 +424,7 @@ const Reports: React.FC = () => {
             </div>
 
             <Modal isOpen={!!reportType} onClose={() => setReportType(null)} title={getReportTitle()}>
-                <div className="printable-area max-h-[70vh] overflow-y-auto p-2">
+                <div className="printable-area max-h-[70vh] overflow-y-auto p-2 print:max-h-none">
                     {getReportContent()}
                 </div>
                 <div className="mt-6 flex flex-wrap justify-end gap-3 no-print">
