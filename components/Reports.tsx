@@ -4,21 +4,23 @@ import { initialMaterials, initialMaterialOrders, initialWorkers, initialTasks, 
 import { Material, MaterialOrder, Worker, Task, TimeLog, BudgetCategory, Expense, Photo } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
+import { useProject } from '../contexts/ProjectContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 
 const Reports: React.FC = () => {
+    const { activeProjectId } = useProject();
     const [reportType, setReportType] = useState<string | null>(null);
 
-    // Cargar todos los datos necesarios desde el almacenamiento local
-    const [materials] = useLocalStorage<Material[]>('materials', initialMaterials);
-    const [orders] = useLocalStorage<MaterialOrder[]>('materialOrders', initialMaterialOrders);
-    const [workers] = useLocalStorage<Worker[]>('workers', initialWorkers);
-    const [tasks] = useLocalStorage<Task[]>('tasks', initialTasks);
-    const [timeLogs] = useLocalStorage<TimeLog[]>('timeLogs', initialTimeLogs);
-    const [budgetCategories] = useLocalStorage<BudgetCategory[]>('budgetCategories', initialBudgetCategories);
-    const [expenses] = useLocalStorage<Expense[]>('expenses', initialExpenses);
-    const [photos] = useLocalStorage<Photo[]>('photos', initialPhotos);
+    // Cargar todos los datos necesarios desde el almacenamiento local para el proyecto activo
+    const [materials] = useLocalStorage<Material[]>(`constructpro_project_${activeProjectId}_materials`, initialMaterials);
+    const [orders] = useLocalStorage<MaterialOrder[]>(`constructpro_project_${activeProjectId}_materialOrders`, initialMaterialOrders);
+    const [workers] = useLocalStorage<Worker[]>(`constructpro_project_${activeProjectId}_workers`, initialWorkers);
+    const [tasks] = useLocalStorage<Task[]>(`constructpro_project_${activeProjectId}_tasks`, initialTasks);
+    const [timeLogs] = useLocalStorage<TimeLog[]>(`constructpro_project_${activeProjectId}_timeLogs`, initialTimeLogs);
+    const [budgetCategories] = useLocalStorage<BudgetCategory[]>(`constructpro_project_${activeProjectId}_budgetCategories`, initialBudgetCategories);
+    const [expenses] = useLocalStorage<Expense[]>(`constructpro_project_${activeProjectId}_expenses`, initialExpenses);
+    const [photos] = useLocalStorage<Photo[]>(`constructpro_project_${activeProjectId}_photos`, initialPhotos);
 
 
     const getTaskProgress = (task: Task) => {
@@ -126,14 +128,13 @@ const Reports: React.FC = () => {
             case 'photos': {
                 const data: (string | number | undefined)[][] = [];
                 data.push(['Reporte de Bitácora de Fotos']);
-                data.push(['ID', 'Descripción', 'Fecha de Subida', 'Etiquetas', 'URL de la Imagen (Base64)']);
+                data.push(['ID', 'Descripción', 'Fecha de Subida', 'Etiquetas']);
                 photos.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).forEach(photo => {
                     data.push([
                         photo.id,
                         photo.description,
                         new Date(photo.uploadDate).toLocaleString(),
                         photo.tags.join(', '),
-                        photo.url
                     ]);
                 });
                 exportToCsv('reporte_fotos.csv', data);

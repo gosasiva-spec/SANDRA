@@ -5,9 +5,11 @@ import { initialPhotos } from '../constants';
 import { Photo } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
+import { useProject } from '../contexts/ProjectContext';
 
 const PhotoLog: React.FC = () => {
-    const [photos, setPhotos] = useLocalStorage<Photo[]>('photos', initialPhotos);
+    const { activeProjectId } = useProject();
+    const [photos, setPhotos] = useLocalStorage<Photo[]>(`constructpro_project_${activeProjectId}_photos`, initialPhotos);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [newPhoto, setNewPhoto] = useState<Partial<Photo>>({ tags: [] });

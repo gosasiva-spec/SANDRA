@@ -6,11 +6,14 @@ import { BudgetCategory, Expense } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
 import ProgressBar from './ui/ProgressBar';
+import { useProject } from '../contexts/ProjectContext';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const Budget: React.FC = () => {
-    const [budgetCategories, setBudgetCategories] = useLocalStorage<BudgetCategory[]>('budgetCategories', initialBudgetCategories);
-    const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses', initialExpenses);
+    const { activeProjectId } = useProject();
+
+    const [budgetCategories, setBudgetCategories] = useLocalStorage<BudgetCategory[]>(`constructpro_project_${activeProjectId}_budgetCategories`, initialBudgetCategories);
+    const [expenses, setExpenses] = useLocalStorage<Expense[]>(`constructpro_project_${activeProjectId}_expenses`, initialExpenses);
     
     // State for expense modal
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);

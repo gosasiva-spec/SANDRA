@@ -6,6 +6,7 @@ import { Material, MaterialOrder } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
 import { GoogleGenAI, Type } from "@google/genai";
+import { useProject } from '../contexts/ProjectContext';
 
 interface Supplier {
     name: string;
@@ -13,8 +14,10 @@ interface Supplier {
 }
 
 const Materials: React.FC = () => {
-    const [materials, setMaterials] = useLocalStorage<Material[]>('materials', initialMaterials);
-    const [orders, setOrders] = useLocalStorage<MaterialOrder[]>('materialOrders', initialMaterialOrders);
+    const { activeProjectId } = useProject();
+
+    const [materials, setMaterials] = useLocalStorage<Material[]>(`constructpro_project_${activeProjectId}_materials`, initialMaterials);
+    const [orders, setOrders] = useLocalStorage<MaterialOrder[]>(`constructpro_project_${activeProjectId}_materialOrders`, initialMaterialOrders);
     
     const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
     const [currentMaterial, setCurrentMaterial] = useState<Partial<Material>>({});

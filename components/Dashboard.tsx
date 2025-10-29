@@ -5,13 +5,16 @@ import ProgressBar from './ui/ProgressBar';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialBudgetCategories, initialExpenses, initialTasks, initialMaterials } from '../constants';
 import { BudgetCategory, Expense, Task, Material } from '../types';
+import { useProject } from '../contexts/ProjectContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const Dashboard: React.FC = () => {
-  const [tasks] = useLocalStorage<Task[]>('tasks', initialTasks);
-  const [materials] = useLocalStorage<Material[]>('materials', initialMaterials);
-  const [budgetCategories] = useLocalStorage<BudgetCategory[]>('budgetCategories', initialBudgetCategories);
-  const [expenses] = useLocalStorage<Expense[]>('expenses', initialExpenses);
+  const { activeProjectId } = useProject();
+  
+  const [tasks] = useLocalStorage<Task[]>(`constructpro_project_${activeProjectId}_tasks`, initialTasks);
+  const [materials] = useLocalStorage<Material[]>(`constructpro_project_${activeProjectId}_materials`, initialMaterials);
+  const [budgetCategories] = useLocalStorage<BudgetCategory[]>(`constructpro_project_${activeProjectId}_budgetCategories`, initialBudgetCategories);
+  const [expenses] = useLocalStorage<Expense[]>(`constructpro_project_${activeProjectId}_expenses`, initialExpenses);
 
   const totalBudget = budgetCategories.reduce((acc, cat) => acc + cat.allocated, 0);
   const totalSpent = expenses.reduce((acc, exp) => acc + exp.amount, 0);

@@ -5,12 +5,15 @@ import { initialWorkers, initialTasks, initialTimeLogs } from '../constants';
 import { Worker, Task, TimeLog } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
+import { useProject } from '../contexts/ProjectContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const Labor: React.FC = () => {
-    const [workers, setWorkers] = useLocalStorage<Worker[]>('workers', initialWorkers);
-    const [tasks] = useLocalStorage<Task[]>('tasks', initialTasks);
-    const [timeLogs, setTimeLogs] = useLocalStorage<TimeLog[]>('timeLogs', initialTimeLogs);
+    const { activeProjectId } = useProject();
+
+    const [workers, setWorkers] = useLocalStorage<Worker[]>(`constructpro_project_${activeProjectId}_workers`, initialWorkers);
+    const [tasks] = useLocalStorage<Task[]>(`constructpro_project_${activeProjectId}_tasks`, initialTasks);
+    const [timeLogs, setTimeLogs] = useLocalStorage<TimeLog[]>(`constructpro_project_${activeProjectId}_timeLogs`, initialTimeLogs);
     
     const [isWorkerModalOpen, setIsWorkerModalOpen] = useState(false);
     const [isTimeLogModalOpen, setIsTimeLogModalOpen] = useState(false);
