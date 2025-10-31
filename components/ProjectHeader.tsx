@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProject } from '../contexts/ProjectContext';
 import Modal from './ui/Modal';
 
@@ -6,6 +6,7 @@ const ProjectHeader: React.FC = () => {
     const { activeProject, projects, switchProject, createProject, deleteProject, activeProjectId } = useProject();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
+    const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
     const handleCreateProject = (e: React.FormEvent) => {
         e.preventDefault();
@@ -14,6 +15,21 @@ const ProjectHeader: React.FC = () => {
             setNewProjectName('');
         }
     };
+    
+    const handleSaveChanges = () => {
+        // Los datos se guardan automáticamente con el hook useLocalStorage.
+        // Este botón solo proporciona una confirmación visual al usuario.
+        setShowSaveConfirmation(true);
+    };
+
+    useEffect(() => {
+        if (showSaveConfirmation) {
+            const timer = setTimeout(() => {
+                setShowSaveConfirmation(false);
+            }, 3000); // Ocultar el mensaje después de 3 segundos
+            return () => clearTimeout(timer);
+        }
+    }, [showSaveConfirmation]);
 
     return (
         <>
@@ -22,12 +38,31 @@ const ProjectHeader: React.FC = () => {
                     <span className="text-sm text-gray-500">Proyecto Actual:</span>
                     <h2 className="text-xl font-bold text-black">{activeProject?.name || 'Cargando...'}</h2>
                 </div>
-                <button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                >
-                    Gestionar Proyectos
-                </button>
+                <div className="flex items-center gap-4">
+                     {showSaveConfirmation && (
+                        <div className="text-green-700 font-semibold bg-green-100 px-3 py-2 rounded-md transition-opacity duration-300">
+                            <span className="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                ¡Proyecto guardado con éxito!
+                            </span>
+                        </div>
+                    )}
+                    <button 
+                        onClick={handleSaveChanges}
+                        title="Los cambios se guardan automáticamente. Este botón confirma que todo está guardado."
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    >
+                        Guardar Cambios
+                    </button>
+                    <button 
+                        onClick={() => setIsModalOpen(true)}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                        Gestionar Proyectos
+                    </button>
+                </div>
             </div>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Gestionar Proyectos">

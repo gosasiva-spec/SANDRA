@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialMaterials, initialMaterialOrders } from '../constants';
 import { Material, MaterialOrder } from '../types';
@@ -32,6 +32,17 @@ const Materials: React.FC = () => {
     const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
     const [suppliersError, setSuppliersError] = useState<string | null>(null);
     const [selectedMaterialForSuppliers, setSelectedMaterialForSuppliers] = useState<Material | null>(null);
+    
+    const [notification, setNotification] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => {
+                setNotification(null);
+            }, 5000); // Ocultar después de 5 segundos
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
 
 
     const handleOpenMaterialModal = (material?: Material) => {
@@ -60,12 +71,39 @@ const Materials: React.FC = () => {
 
     const handleSaveMaterial = () => {
         if (isEditingMaterial) {
-            setMaterials(materials.map(m => m.id === currentMaterial.id ? currentMaterial as Material : m));
+            const originalMaterial = materials.find(m => m.id === currentMaterial.id);
+            const updatedMaterial = currentMaterial as Material;
+            
+            setMaterials(materials.map(m => m.id === updatedMaterial.id ? updatedMaterial : m));
+
+            // Notificar solo si la cantidad cruza el umbral crítico hacia abajo
+            if (originalMaterial && updatedMaterial.quantity <= updatedMaterial.criticalStockLevel && originalMaterial.quantity > originalMaterial.criticalStockLevel) {
+                setNotification(`¡Advertencia! El stock de "${updatedMaterial.name}" ha caído por debajo del nivel crítico de ${updatedMaterial.criticalStockLevel} ${updatedMaterial.unit}.`);
+            }
         } else {
             const newMaterial = { ...currentMaterial, id: `mat-${Date.now()}` } as Material;
             setMaterials([...materials, newMaterial]);
+             // Notificar si el nuevo material ya está por debajo del nivel crítico
+            if (newMaterial.quantity <= newMaterial.criticalStockLevel) {
+                 setNotification(`¡Advertencia! El nuevo material "${newMaterial.name}" fue añadido con stock por debajo del nivel crítico.`);
+            }
         }
         handleCloseMaterialModal();
+    };
+
+    const handleDeleteMaterial = (materialId: string) => {
+        const materialToDelete = materials.find(m => m.id === materialId);
+        if (!materialToDelete) return;
+
+        const isMaterialInOrders = orders.some(order => order.materialId === materialId);
+        if (isMaterialInOrders) {
+            alert('Este material no se puede eliminar porque está asociado a uno o más pedidos. Por favor, elimine o modifique los pedidos asociados primero.');
+            return;
+        }
+
+        if (window.confirm(`¿Estás seguro de que quieres eliminar el material "${materialToDelete.name}"? Esta acción no se puede deshacer.`)) {
+            setMaterials(materials.filter(m => m.id !== materialId));
+        }
     };
 
     const handleMaterialChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -160,6 +198,21 @@ const Materials: React.FC = () => {
 
     return (
         <div>
+            {notification && (
+                <div className="fixed top-24 right-5 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow-lg z-50 animate-toast" role="alert">
+                    <div className="flex items-start">
+                        <div className="py-1"><svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zM9 5v6h2V5H9zm0 8v2h2v-2H9z"/></svg></div>
+                        <div className="flex-1">
+                            <p className="font-bold">Alerta de Stock Bajo</p>
+                            <p className="text-sm">{notification}</p>
+                        </div>
+                        <button onClick={() => setNotification(null)} className="ml-auto -mx-1.5 -my-1.5 bg-yellow-100 text-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-400 p-1.5 hover:bg-yellow-200 inline-flex h-8 w-8" aria-label="Cerrar">
+                            <span className="sr-only">Cerrar</span>
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            )}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-semibold text-black">Inventario de Materiales</h2>
                 <button onClick={() => handleOpenMaterialModal()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
@@ -203,6 +256,9 @@ const Materials: React.FC = () => {
                                         >
                                             Buscar Proveedores
                                         </button>
+                                        <button onClick={() => handleDeleteMaterial(material.id)} className="ml-4 text-red-600 hover:text-red-800 font-medium">
+                                            Eliminar
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -234,7 +290,7 @@ const Materials: React.FC = () => {
                                 const material = materials.find(m => m.id === order.materialId);
                                 return (
                                     <tr key={order.id} className="border-b hover:bg-gray-50">
-                                        <td className="p-3 font-medium">{material?.name || 'N/A'}</td>
+                                        <td className="p-3 font-medium">{material?.name || 'Material Eliminado'}</td>
                                         <td className="p-3">{order.quantity} {material?.unit}</td>
                                         <td className="p-3">{new Date(order.orderDate).toLocaleDateString()}</td>
                                         <td className="p-3">
