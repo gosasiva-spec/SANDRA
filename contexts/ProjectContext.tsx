@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { initialMaterials, initialWorkers, initialTasks, initialTimeLogs, initialBudgetCategories, initialExpenses, initialPhotos, initialMaterialOrders } from '../constants';
+import { initialMaterials, initialWorkers, initialTasks, initialTimeLogs, initialBudgetCategories, initialExpenses, initialPhotos, initialMaterialOrders, initialClients, initialInteractions } from '../constants';
 
 interface Project {
   id: string;
@@ -18,7 +18,7 @@ interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
-const DATA_KEYS = ['materials', 'materialOrders', 'workers', 'tasks', 'timeLogs', 'budgetCategories', 'expenses', 'photos'];
+const DATA_KEYS = ['materials', 'materialOrders', 'workers', 'tasks', 'timeLogs', 'budgetCategories', 'expenses', 'photos', 'clients', 'interactions'];
 
 const getInitialProjectData = () => ({
     materials: initialMaterials,
@@ -29,6 +29,8 @@ const getInitialProjectData = () => ({
     budgetCategories: initialBudgetCategories,
     expenses: initialExpenses,
     photos: initialPhotos,
+    clients: initialClients,
+    interactions: initialInteractions,
 });
 
 

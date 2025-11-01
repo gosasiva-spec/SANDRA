@@ -1,5 +1,5 @@
 import React from 'react';
-import { Material, Worker, Task, Expense, Photo, BudgetCategory, MaterialOrder, TimeLog } from './types';
+import { Material, Worker, Task, Expense, Photo, BudgetCategory, MaterialOrder, TimeLog, Client, Interaction } from './types';
 
 export const initialMaterials: Material[] = [
     { id: 'mat-1', name: 'Cemento', description: 'Portland Tipo I', quantity: 100, unit: 'sacos', unitCost: 10, criticalStockLevel: 20 },
@@ -39,6 +39,16 @@ export const initialMaterialOrders: MaterialOrder[] = [
     { id: 'ord-1', materialId: 'mat-1', quantity: 50, orderDate: new Date().toISOString().split('T')[0], status: 'Enviado' }
 ];
 
+export const initialClients: Client[] = [
+    { id: 'cli-1', name: 'Constructora del Sol S.A.', type: 'Empresa', status: 'Activo', primaryContactName: 'Luisa Martinez', primaryContactEmail: 'luisa@constructoradelsol.com', primaryContactPhone: '555-1234', address: 'Av. Principal 123', notes: 'Cliente recurrente para proyectos comerciales.' },
+    { id: 'cli-2', name: 'Familia Robles', type: 'Individual', status: 'Potencial', primaryContactName: 'Carlos Robles', primaryContactEmail: 'carlos.robles@email.com', primaryContactPhone: '555-5678', address: 'Calle Falsa 456', notes: 'Interesados en la construcción de una casa de campo.' },
+];
+
+export const initialInteractions: Interaction[] = [
+    { id: 'int-1', clientId: 'cli-1', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], type: 'Reunión', summary: 'Revisión de planos para el nuevo centro comercial.', followUpDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
+    { id: 'int-2', clientId: 'cli-2', date: new Date().toISOString().split('T')[0], type: 'Llamada', summary: 'Primera llamada de contacto. Se envió cotización inicial por correo.' },
+];
+
 
 // FIX: Replaced JSX.Element with React.ReactElement to resolve "Cannot find namespace 'JSX'" error.
 export const ICONS: { [key: string]: React.ReactElement } = {
@@ -48,5 +58,6 @@ export const ICONS: { [key: string]: React.ReactElement } = {
   'Presupuesto': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
   'Cronograma': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   'Bitácora de Fotos': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  'CRM / Clientes': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
   'Reportes': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
 };

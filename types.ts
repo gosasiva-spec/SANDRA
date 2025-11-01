@@ -69,3 +69,24 @@ export interface Photo {
   tags: string[];
   uploadDate: string;
 }
+
+export interface Client {
+  id: string;
+  name: string;
+  type: 'Empresa' | 'Individual';
+  status: 'Activo' | 'Inactivo' | 'Potencial';
+  primaryContactName: string;
+  primaryContactEmail: string;
+  primaryContactPhone: string;
+  address: string;
+  notes: string;
+}
+
+export interface Interaction {
+  id: string;
+  clientId: string;
+  date: string;
+  type: 'Llamada' | 'Correo Electrónico' | 'Reunión' | 'Otro';
+  summary: string;
+  followUpDate?: string;
+}

@@ -7,10 +7,11 @@ import Budget from './components/Budget';
 import Schedule from './components/Schedule';
 import PhotoLog from './components/PhotoLog';
 import Reports from './components/Reports';
+import CRM from './components/CRM';
 import { ProjectProvider } from './contexts/ProjectContext';
 import ProjectHeader from './components/ProjectHeader';
 
-export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Cronograma' | 'Bitácora de Fotos' | 'Reportes';
+export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Cronograma' | 'Bitácora de Fotos' | 'Reportes' | 'CRM / Clientes';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('Panel');
@@ -31,6 +32,8 @@ const App: React.FC = () => {
         return <PhotoLog />;
       case 'Reportes':
         return <Reports />;
+      case 'CRM / Clientes':
+        return <CRM />;
       default:
         return <Dashboard />;
     }
