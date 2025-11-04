@@ -28,12 +28,7 @@ const Reports: React.FC = () => {
             return Math.min(100, ((task.completedVolume || 0) / task.totalVolume) * 100);
         }
         if (task.status === 'Completado') return 100;
-        if (task.status === 'No Iniciado') return 0;
-        const totalDuration = new Date(task.endDate).getTime() - new Date(task.startDate).getTime();
-        if (totalDuration <= 0) return 0;
-        const elapsedDuration = new Date().getTime() - new Date(task.startDate).getTime();
-        if (elapsedDuration <= 0) return 0;
-        return Math.min(100, (elapsedDuration / totalDuration) * 100);
+        return 0;
     };
 
     const exportToCsv = (filename: string, rows: (string | number | undefined)[][]) => {
@@ -115,12 +110,13 @@ const Reports: React.FC = () => {
             case 'progress': {
                 const data: (string | number | undefined)[][] = [];
                 data.push(['Cronograma de Tareas del Proyecto']);
-                data.push(['Tarea', 'Descripción', 'Asignado a', 'Fecha de Inicio', 'Fecha de Fin', 'Fecha de Finalización', 'Estado', 'Progreso (%)', 'IDs de Fotos']);
+                data.push(['Tarea', 'Descripción', 'Asignado a', 'Fecha de Inicio', 'Fecha de Fin', 'Fecha de Finalización', 'Estado', 'Progreso (%)', 'Dependencias', 'IDs de Fotos']);
                 sortedTasks.forEach(task => {
                     const workerName = workers.find(w => w.id === task.assignedWorkerId)?.name || 'Sin asignar';
                     const progress = getTaskProgress(task);
+                    const dependencies = task.dependsOn?.map(depId => tasks.find(t => t.id === depId)?.name || depId).join('; ') || '';
                     const photoIds = task.photoIds ? task.photoIds.join('; ') : '';
-                    data.push([task.name, task.description, workerName, task.startDate, task.endDate, task.completionDate, task.status, progress.toFixed(1), photoIds]);
+                    data.push([task.name, task.description, workerName, task.startDate, task.endDate, task.completionDate, task.status, progress.toFixed(1), dependencies, photoIds]);
                 });
                 exportToCsv('reporte_progreso.csv', data);
                 break;

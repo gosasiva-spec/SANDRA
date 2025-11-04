@@ -4,7 +4,7 @@ import Dashboard from './components/Dashboard';
 import Materials from './components/Materials';
 import Labor from './components/Labor';
 import Budget from './components/Budget';
-import Schedule from './components/Schedule';
+import Planning from './components/Planning';
 import PhotoLog from './components/PhotoLog';
 import Reports from './components/Reports';
 import CRM from './components/CRM';
@@ -12,7 +12,7 @@ import { ProjectProvider, useProject } from './contexts/ProjectContext';
 import ProjectHeader from './components/ProjectHeader';
 import LoginScreen from './components/LoginScreen';
 
-export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Cronograma' | 'Bitácora de Fotos' | 'Reportes' | 'CRM / Clientes';
+export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Planificación' | 'Bitácora de Fotos' | 'Reportes' | 'CRM / Clientes';
 
 const App: React.FC = () => {
   return (
@@ -52,8 +52,8 @@ const AppContent: React.FC = () => {
         return <Labor />;
       case 'Presupuesto':
         return <Budget />;
-      case 'Cronograma':
-        return <Schedule />;
+      case 'Planificación':
+        return <Planning />;
       case 'Bitácora de Fotos':
         return <PhotoLog />;
       case 'Reportes':
