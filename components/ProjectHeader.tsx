@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useProject, Project } from '../contexts/ProjectContext';
 import Modal from './ui/Modal';
+import { User } from '../types';
 
-const ProjectHeader: React.FC = () => {
+interface ProjectHeaderProps {
+    onLogout: () => void;
+    currentUser: User;
+}
+
+const ProjectHeader: React.FC<ProjectHeaderProps> = ({ onLogout, currentUser }) => {
     const { activeProject, projects, switchProject, createProject, updateProject, deleteProject, activeProjectId } = useProject();
     
     const [isManageModalOpen, setIsManageModalOpen] = useState(false);
@@ -61,10 +67,14 @@ const ProjectHeader: React.FC = () => {
         <>
             <div className="bg-white shadow-md p-4 flex justify-between items-center no-print sticky top-0 z-10">
                 <div>
-                    <span className="text-sm text-gray-500">Proyecto Actual:</span>
-                    <h2 className="text-xl font-bold text-black">{activeProject?.name || 'Cargando...'}</h2>
+                     <span className="text-sm text-gray-500">Proyecto Actual:</span>
+                    <h2 className="text-xl font-bold text-black">{activeProject?.name || 'Ningún proyecto seleccionado'}</h2>
                 </div>
                 <div className="flex items-center gap-4">
+                     <div className="text-right">
+                        <span className="text-sm font-medium text-black">{currentUser.name}</span>
+                        <button onClick={onLogout} className="text-xs text-blue-600 hover:text-blue-800 ml-2 font-semibold">Cerrar Sesión</button>
+                    </div>
                      {showSaveConfirmation && (
                         <div className="text-green-700 font-semibold bg-green-100 px-3 py-2 rounded-md transition-opacity duration-300">
                             <span className="flex items-center gap-2">
@@ -91,7 +101,7 @@ const ProjectHeader: React.FC = () => {
                 </div>
             </div>
 
-            <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(true)} title="Gestionar Proyectos">
+            <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Gestionar Proyectos">
                 <div className="space-y-6">
                     <div>
                         <h3 className="text-lg font-semibold text-black mb-2">Crear Nuevo Proyecto</h3>
@@ -121,7 +131,7 @@ const ProjectHeader: React.FC = () => {
                         </form>
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-black mb-2">Proyectos Existentes</h3>
+                        <h3 className="text-lg font-semibold text-black mb-2">Mis Proyectos</h3>
                         <div className="space-y-2 max-h-60 overflow-y-auto p-1 border rounded-md">
                             {projects.length > 0 ? projects.map(project => (
                                 <div key={project.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -140,14 +150,13 @@ const ProjectHeader: React.FC = () => {
                                          <button onClick={() => handleOpenEditModal(project)} className="px-3 py-1 text-sm bg-gray-500 text-white rounded-md hover:bg-gray-600">Editar</button>
                                          <button
                                             onClick={() => deleteProject(project.id)}
-                                            disabled={projects.length <= 1}
-                                            className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed"
+                                            className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
                                         >
                                             Eliminar
                                         </button>
                                     </div>
                                 </div>
-                            )) : <p className="text-center text-gray-500 p-4">No hay proyectos. ¡Crea uno para empezar!</p>}
+                            )) : <p className="text-center text-gray-500 p-4">No tienes proyectos. ¡Crea uno para empezar!</p>}
                         </div>
                     </div>
                 </div>

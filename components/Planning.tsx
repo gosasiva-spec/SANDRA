@@ -184,7 +184,7 @@ const Planning: React.FC = () => {
 
     const handleOpenModal = (task?: Task) => {
         if (task) {
-            setCurrentTask(task);
+            setCurrentTask({ ...task, photoIds: task.photoIds || [], dependsOn: task.dependsOn || [] });
             setIsEditing(true);
         } else {
             setCurrentTask({ status: 'No Iniciado', startDate: new Date().toISOString().split('T')[0], photoIds: [], dependsOn: [] });
@@ -266,6 +266,17 @@ const Planning: React.FC = () => {
         return 0;
     };
 
+    const handlePhotoSelection = (photoId: string) => {
+        setCurrentTask(prev => {
+            const currentPhotoIds = prev.photoIds || [];
+            if (currentPhotoIds.includes(photoId)) {
+                return { ...prev, photoIds: currentPhotoIds.filter(id => id !== photoId) };
+            } else {
+                return { ...prev, photoIds: [...currentPhotoIds, photoId] };
+            }
+        });
+    };
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -315,6 +326,21 @@ const Planning: React.FC = () => {
                                    <span className="ml-4 w-12 text-right text-sm font-semibold text-black">{progress.toFixed(0)}%</span>
                                </div>
                            </div>
+                           {attachedPhotos.length > 0 && (
+                                <div className="mt-4">
+                                    <h5 className="text-sm font-semibold text-black mb-2">Fotos Adjuntas:</h5>
+                                    <div className="flex flex-wrap gap-2">
+                                        {attachedPhotos.map(photo => (
+                                            <div key={photo.id} className="relative group cursor-pointer" onClick={() => setViewingPhotoUrl(photo.url)}>
+                                                <img src={photo.url} alt={photo.description} className="h-20 w-20 object-cover rounded-md border-2 border-transparent group-hover:border-primary-500 transition-all" />
+                                                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )})}
                 </div>
@@ -387,10 +413,54 @@ const Planning: React.FC = () => {
                         <label className="text-black block text-sm font-medium">Volumen de Avance</label>
                         <input type="number" placeholder="Ej. 25" value={currentTask.completedVolume || ''} onChange={e => setCurrentTask({...currentTask, completedVolume: parseFloat(e.target.value) || undefined})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
                     </div>
+                    
+                    <div>
+                        <label className="text-black block text-sm font-medium">Fotos Adjuntas</label>
+                        <div className="flex items-center gap-2 mt-1">
+                            <div className="flex flex-wrap gap-2 p-2 border rounded-md flex-grow bg-gray-50 min-h-[40px]">
+                                {(currentTask.photoIds || []).map(id => {
+                                    const photo = photos.find(p => p.id === id);
+                                    return photo ? <img key={id} src={photo.url} alt={photo.description} className="h-10 w-10 object-cover rounded" /> : null;
+                                })}
+                                {(currentTask.photoIds || []).length === 0 && <span className="text-sm text-gray-500">Ninguna</span>}
+                            </div>
+                             <button onClick={() => setIsPhotoManagerOpen(true)} className="px-3 py-2 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 transition-colors font-medium text-sm">Gestionar</button>
+                        </div>
+                    </div>
 
                     <button onClick={handleSave} className="w-full mt-2 py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Guardar Tarea</button>
                 </div>
             </Modal>
+
+             <Modal isOpen={isPhotoManagerOpen} onClose={() => setIsPhotoManagerOpen(false)} title="Gestionar Fotos de la Tarea">
+                <div className="max-h-[60vh] overflow-y-auto p-1">
+                    {photos.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                            {photos.map(photo => (
+                                <div key={photo.id} className="relative cursor-pointer" onClick={() => handlePhotoSelection(photo.id)}>
+                                    <img src={photo.url} alt={photo.description} className={`w-full h-28 object-cover rounded-md transition-all ${currentTask.photoIds?.includes(photo.id) ? 'ring-4 ring-primary-500' : 'ring-2 ring-transparent'}`} />
+                                    {(currentTask.photoIds?.includes(photo.id)) && (
+                                        <div className="absolute top-1 right-1 bg-primary-600 text-white rounded-full h-6 w-6 flex items-center justify-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-center text-black py-8">No hay fotos en la bitácora del proyecto. Sube algunas fotos primero.</p>
+                    )}
+                </div>
+                 <div className="mt-4 flex justify-end">
+                    <button onClick={() => setIsPhotoManagerOpen(false)} className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Hecho</button>
+                 </div>
+            </Modal>
+            
+            {viewingPhotoUrl && (
+                 <Modal isOpen={!!viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} title="Vista Previa de Foto">
+                    <img src={viewingPhotoUrl} alt="Vista Previa" className="w-full max-h-[80vh] object-contain rounded-lg"/>
+                 </Modal>
+            )}
         </div>
     );
 };

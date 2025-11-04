@@ -102,3 +102,10 @@ export interface ContentEntry {
   updatedAt: string;
   tags: string[];
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  password?: string; // Should be hashed in a real app
+}
