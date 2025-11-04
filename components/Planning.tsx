@@ -195,35 +195,36 @@ const Planning: React.FC = () => {
 
     const handleSave = () => {
         const taskToSave: Partial<Task> = { ...currentTask };
-
+    
         // Automatic status update based on progress volume
         if (typeof taskToSave.totalVolume === 'number' && taskToSave.totalVolume > 0) {
             const completedVolume = taskToSave.completedVolume || 0;
             const totalVolume = taskToSave.totalVolume;
-
-            // Case 1: Task is completed based on volume
+    
             if (completedVolume >= totalVolume) {
-                // Only update if status is not already 'Completado' to avoid overwriting a manual completion date
+                // If volume indicates completion, set status accordingly
                 if (taskToSave.status !== 'Completado') {
                     taskToSave.status = 'Completado';
-                    taskToSave.completionDate = new Date().toISOString().split('T')[0];
                 }
-            } 
-            // Case 2: Task is in progress based on volume
-            else if (completedVolume > 0) {
-                // If it was 'No Iniciado' or reverted from 'Completado', set to 'En Progreso'
+            } else if (completedVolume > 0) {
+                // If there's some progress, ensure it's 'En Progreso'
                 if (taskToSave.status === 'No Iniciado' || taskToSave.status === 'Completado') {
                     taskToSave.status = 'En Progreso';
-                    taskToSave.completionDate = undefined; // Ensure completion date is cleared
                 }
             }
         }
         
-        // Fallback logic for tasks without volume or if status is set manually
-        if (taskToSave.status === 'Completado' && !taskToSave.completionDate) {
-            taskToSave.completionDate = new Date().toISOString().split('T')[0];
+        // Centralized logic for handling completionDate based on the final status
+        if (taskToSave.status === 'Completado') {
+            // If the task is being marked as complete, set the completion date if it doesn't have one.
+            if (!taskToSave.completionDate) {
+                taskToSave.completionDate = new Date().toISOString().split('T')[0];
+            }
+        } else {
+            // If the task is not complete, ensure the completion date is cleared.
+            taskToSave.completionDate = undefined;
         }
-
+    
         if (isEditing) {
             setTasks(tasks.map(t => t.id === taskToSave.id ? taskToSave as Task : t));
         } else {
