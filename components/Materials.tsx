@@ -148,6 +148,10 @@ const Materials: React.FC = () => {
         setCurrentOrder(prev => ({ ...prev, [name]: name === 'quantity' ? parseFloat(value) : value }));
     };
 
+    const handleOrderStatusChange = (orderId: string, newStatus: MaterialOrder['status']) => {
+        setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    };
+
     const handleFindSuppliers = async (material: Material) => {
         if (!material.location) return;
         setSelectedMaterialForSuppliers(material);
@@ -294,14 +298,21 @@ const Materials: React.FC = () => {
                                         <td className="p-3">{order.quantity} {material?.unit}</td>
                                         <td className="p-3">{new Date(order.orderDate).toLocaleDateString()}</td>
                                         <td className="p-3">
-                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                                order.status === 'Entregado' ? 'bg-green-500 text-white' :
-                                                order.status === 'Enviado' ? 'bg-blue-500 text-white' :
-                                                order.status === 'Pendiente' ? 'bg-yellow-400 text-black' :
-                                                order.status === 'Cancelado' ? 'bg-gray-500 text-white' : ''
-                                            }`}>
-                                                {order.status}
-                                            </span>
+                                            <select
+                                                value={order.status}
+                                                onChange={(e) => handleOrderStatusChange(order.id, e.target.value as MaterialOrder['status'])}
+                                                className={`px-2 py-1 text-xs font-semibold rounded-full border-0 focus:ring-0 appearance-none cursor-pointer ${
+                                                    order.status === 'Entregado' ? 'bg-green-500 text-white' :
+                                                    order.status === 'Enviado' ? 'bg-blue-500 text-white' :
+                                                    order.status === 'Pendiente' ? 'bg-yellow-400 text-black' :
+                                                    order.status === 'Cancelado' ? 'bg-gray-500 text-white' : ''
+                                                }`}
+                                            >
+                                                <option value="Pendiente">Pendiente</option>
+                                                <option value="Enviado">Enviado</option>
+                                                <option value="Entregado">Entregado</option>
+                                                <option value="Cancelado">Cancelado</option>
+                                            </select>
                                         </td>
                                         <td className="p-3">
                                             <button onClick={() => handleOpenOrderModal(order)} className="text-black hover:text-gray-600 font-medium">Editar</button>

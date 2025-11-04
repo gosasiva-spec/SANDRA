@@ -8,7 +8,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
-  const navItems: View[] = ['Panel', 'Materiales', 'Mano de Obra', 'Presupuesto', 'Planificación', 'Bitácora de Fotos', 'CRM / Clientes', 'Reportes'];
+  const navItems: View[] = ['Panel', 'Materiales', 'Mano de Obra', 'Presupuesto', 'Planificación', 'Bitácora de Fotos', 'CRM / Clientes', 'Reportes', 'CMS'];
 
   return (
     <div className="flex flex-col w-64 bg-white shadow-lg no-print">

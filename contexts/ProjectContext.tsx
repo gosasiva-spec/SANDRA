@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { initialMaterials, initialWorkers, initialTasks, initialTimeLogs, initialBudgetCategories, initialExpenses, initialPhotos, initialMaterialOrders, initialClients, initialInteractions } from '../constants';
+import { initialMaterials, initialWorkers, initialTasks, initialTimeLogs, initialBudgetCategories, initialExpenses, initialPhotos, initialMaterialOrders, initialClients, initialInteractions, initialCmsEntries } from '../constants';
 
 export interface Project {
   id: string;
@@ -22,7 +22,7 @@ interface ProjectContextType {
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
-const DATA_KEYS = ['materials', 'materialOrders', 'workers', 'tasks', 'timeLogs', 'budgetCategories', 'expenses', 'photos', 'clients', 'interactions'];
+const DATA_KEYS = ['materials', 'materialOrders', 'workers', 'tasks', 'timeLogs', 'budgetCategories', 'expenses', 'photos', 'clients', 'interactions', 'cms_entries'];
 
 const getInitialProjectData = () => ({
     materials: initialMaterials,
@@ -35,6 +35,7 @@ const getInitialProjectData = () => ({
     photos: initialPhotos,
     clients: initialClients,
     interactions: initialInteractions,
+    cms_entries: initialCmsEntries,
 });
 
 

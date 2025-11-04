@@ -11,8 +11,9 @@ import CRM from './components/CRM';
 import { ProjectProvider, useProject } from './contexts/ProjectContext';
 import ProjectHeader from './components/ProjectHeader';
 import LoginScreen from './components/LoginScreen';
+import CMS from './components/CMS';
 
-export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Planificación' | 'Bitácora de Fotos' | 'Reportes' | 'CRM / Clientes';
+export type View = 'Panel' | 'Materiales' | 'Mano de Obra' | 'Presupuesto' | 'Planificación' | 'Bitácora de Fotos' | 'Reportes' | 'CRM / Clientes' | 'CMS';
 
 const App: React.FC = () => {
   return (
@@ -60,6 +61,8 @@ const AppContent: React.FC = () => {
         return <Reports />;
       case 'CRM / Clientes':
         return <CRM />;
+      case 'CMS':
+        return <CMS />;
       default:
         return <Dashboard />;
     }

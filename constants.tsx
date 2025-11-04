@@ -1,5 +1,5 @@
 import React from 'react';
-import { Material, Worker, Task, Expense, Photo, BudgetCategory, MaterialOrder, TimeLog, Client, Interaction } from './types';
+import { Material, Worker, Task, Expense, Photo, BudgetCategory, MaterialOrder, TimeLog, Client, Interaction, ContentEntry } from './types';
 
 export const initialMaterials: Material[] = [
     { id: 'mat-1', name: 'Cemento', description: 'Portland Tipo I', quantity: 100, unit: 'sacos', unitCost: 10, criticalStockLevel: 20 },
@@ -49,6 +49,19 @@ export const initialInteractions: Interaction[] = [
     { id: 'int-2', clientId: 'cli-2', date: new Date().toISOString().split('T')[0], type: 'Llamada', summary: 'Primera llamada de contacto. Se envió cotización inicial por correo.' },
 ];
 
+export const initialCmsEntries: ContentEntry[] = [
+    {
+        id: 'cms-1',
+        title: '¡Bienvenidos al Proyecto!',
+        content: 'Este es el primer anuncio de nuestro nuevo proyecto. Estamos emocionados de empezar y los mantendremos actualizados sobre nuestro progreso. ¡Estén atentos para más noticias!',
+        author: 'Gerente de Proyecto',
+        status: 'Publicado',
+        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        tags: ['anuncio', 'inicio']
+    }
+];
+
 
 // FIX: Replaced JSX.Element with React.ReactElement to resolve "Cannot find namespace 'JSX'" error.
 export const ICONS: { [key: string]: React.ReactElement } = {
@@ -59,5 +72,6 @@ export const ICONS: { [key: string]: React.ReactElement } = {
   'Planificación': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   'Bitácora de Fotos': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   'CRM / Clientes': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
-  'Reportes': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+  'Reportes': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+  'CMS': <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
 };

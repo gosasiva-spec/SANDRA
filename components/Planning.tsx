@@ -286,6 +286,7 @@ const Planning: React.FC = () => {
                     {tasks.sort((a,b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()).map(task => {
                         const attachedPhotos = task.photoIds ? photos.filter(p => task.photoIds!.includes(p.id)) : [];
                         const dependencies = task.dependsOn ? tasks.filter(t => task.dependsOn!.includes(t.id)) : [];
+                        const progress = getTaskProgress(task);
                         return (
                         <div key={task.id} className="p-4 border rounded-lg hover:shadow-lg transition-shadow">
                            <div className="flex justify-between items-start">
@@ -307,7 +308,12 @@ const Planning: React.FC = () => {
                                 </div>
                            </div>
                            <div className="mt-3">
-                                <ProgressBar value={getTaskProgress(task)} color={task.status === 'Retrasado' ? 'red' : task.status === 'Completado' ? 'green' : 'blue'} />
+                               <div className="flex items-center">
+                                   <div className="flex-grow">
+                                       <ProgressBar value={progress} color={task.status === 'Retrasado' ? 'red' : task.status === 'Completado' ? 'green' : 'blue'} />
+                                   </div>
+                                   <span className="ml-4 w-12 text-right text-sm font-semibold text-black">{progress.toFixed(0)}%</span>
+                               </div>
                            </div>
                         </div>
                     )})}

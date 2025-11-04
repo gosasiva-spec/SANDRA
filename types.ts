@@ -91,3 +91,14 @@ export interface Interaction {
   summary: string;
   followUpDate?: string;
 }
+
+export interface ContentEntry {
+  id: string;
+  title: string;
+  content: string;
+  author: string;
+  status: 'Borrador' | 'Publicado';
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+}
