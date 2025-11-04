@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialBudgetCategories, initialExpenses } from '../constants';
@@ -142,17 +143,31 @@ const Budget: React.FC = () => {
                             </ResponsiveContainer>
                         </div>
                     </Card>
-                    <Card title="Gestionar Categorías de Presupuesto">
-                        <div className="space-y-2 mb-4">
-                            {budgetCategories.map(cat => (
-                                <div key={cat.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                                    <div>
-                                        <p className="font-medium text-black">{cat.name}</p>
-                                        <p className="text-sm text-black">${cat.allocated.toLocaleString()}</p>
+                    <Card title="Resumen de Categorías">
+                        <div className="space-y-3 mb-4">
+                            {budgetCategories.map(cat => {
+                                const spent = expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
+                                const progress = cat.allocated > 0 ? (spent / cat.allocated) * 100 : 0;
+                                const isOverBudget = progress > 100;
+                                return (
+                                    <div key={cat.id} className={`p-3 rounded-lg ${isOverBudget ? 'bg-red-50' : 'bg-gray-50'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-medium text-black">{cat.name}</span>
+                                            {isOverBudget && <span className="text-xs font-bold text-red-600">EXCEDIDO</span>}
+                                            <button onClick={() => handleOpenCategoryModal(cat)} className="text-xs text-blue-600 hover:text-blue-800 font-semibold">EDITAR</button>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm mt-2">
+                                            <span className={`font-semibold ${isOverBudget ? 'text-red-600' : 'text-black'}`}>${spent.toLocaleString()}</span>
+                                            <span className="text-gray-500">/ ${cat.allocated.toLocaleString()}</span>
+                                        </div>
+                                        <ProgressBar 
+                                            value={progress} 
+                                            color={isOverBudget ? 'red' : progress > 85 ? 'yellow' : 'blue'} 
+                                            className="mt-1" 
+                                        />
                                     </div>
-                                    <button onClick={() => handleOpenCategoryModal(cat)} className="text-sm text-black hover:text-gray-600 font-semibold">Editar</button>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                         <button onClick={() => handleOpenCategoryModal()} className="w-full py-2 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors font-medium">
                             Añadir Categoría
