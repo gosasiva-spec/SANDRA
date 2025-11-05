@@ -194,6 +194,27 @@ const Planning: React.FC = () => {
     };
 
     const handleSave = () => {
+        // --- Dependency Validation ---
+        if (currentTask.dependsOn && currentTask.dependsOn.length > 0) {
+            for (const depId of currentTask.dependsOn) {
+                const dependencyTask = tasks.find(t => t.id === depId);
+                if (dependencyTask) {
+                    // 1. Date Validation: Task cannot start before its dependency ends.
+                    if (currentTask.startDate && new Date(currentTask.startDate) < new Date(dependencyTask.endDate)) {
+                        alert(`Error de validación:\nLa tarea "${currentTask.name}" no puede comenzar antes de que finalice su dependencia "${dependencyTask.name}".\n\nFecha de fin de la dependencia: ${new Date(dependencyTask.endDate).toLocaleDateString()}\nFecha de inicio de la tarea actual: ${new Date(currentTask.startDate).toLocaleDateString()}`);
+                        return; // Stop saving
+                    }
+
+                    // 2. Status Validation: Task cannot be 'In Progress' or 'Completed' if dependency is not 'Completed'.
+                    if ((currentTask.status === 'En Progreso' || currentTask.status === 'Completado') && dependencyTask.status !== 'Completado') {
+                        alert(`Error de validación:\nLa tarea "${currentTask.name}" no puede estar 'En Progreso' o 'Completado' porque su dependencia "${dependencyTask.name}" aún no está completada.`);
+                        return; // Stop saving
+                    }
+                }
+            }
+        }
+        // --- End of Validation ---
+
         const taskToSave: Partial<Task> = { ...currentTask };
     
         // Automatic status update based on progress volume
