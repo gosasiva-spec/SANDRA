@@ -34,6 +34,25 @@ const Dashboard: React.FC = () => {
     const spent = expenses.filter(exp => exp.categoryId === cat.id).reduce((sum, exp) => sum + exp.amount, 0);
     return { name: cat.name, Asignado: cat.allocated, Gastado: spent };
   });
+
+  const upcomingTasks = tasks.filter(t => t.status !== 'Completado').slice(0, 5);
+  const taskStatusCounts = upcomingTasks.reduce((acc, task) => {
+    const status = task.status;
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const taskStatusChartData = [
+      { name: 'No Iniciado', Tareas: taskStatusCounts['No Iniciado'] || 0 },
+      { name: 'En Progreso', Tareas: taskStatusCounts['En Progreso'] || 0 },
+      { name: 'Retrasado', Tareas: taskStatusCounts['Retrasado'] || 0 },
+  ].filter(item => item.Tareas > 0);
+
+  const TASK_STATUS_COLORS: { [key: string]: string } = {
+      'No Iniciado': '#a1a1aa',
+      'En Progreso': '#3b82f6',
+      'Retrasado': '#ef4444',
+  };
   
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
 
@@ -86,13 +105,33 @@ const Dashboard: React.FC = () => {
 
         <Card title="Próximas Tareas">
           <ul className="space-y-3">
-            {tasks.filter(t => t.status !== 'Completado').slice(0, 5).map(task => (
+            {upcomingTasks.map(task => (
               <li key={task.id} className="p-3 bg-gray-50 rounded-md">
                 <p className="font-semibold text-black">{task.name}</p>
                 <p className="text-sm text-black">Vence: {new Date(task.endDate).toLocaleDateString()}</p>
               </li>
             ))}
+             {upcomingTasks.length === 0 && (
+                <p className="text-center text-gray-500 py-4">No hay tareas próximas.</p>
+            )}
           </ul>
+           {taskStatusChartData.length > 0 && (
+            <div className="mt-4 pt-4 border-t" style={{ width: '100%', height: 150 }}>
+                <h5 className="text-sm font-semibold text-black mb-2 text-center">Estado de las Próximas 5 Tareas</h5>
+                <ResponsiveContainer>
+                    <BarChart data={taskStatusChartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <XAxis type="number" allowDecimals={false} />
+                        <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} />
+                        <Tooltip cursor={{fill: '#fafafa'}} />
+                        <Bar dataKey="Tareas" barSize={20}>
+                            {taskStatusChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={TASK_STATUS_COLORS[entry.name]} />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+          )}
         </Card>
       </div>
     </div>
