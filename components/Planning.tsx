@@ -43,27 +43,23 @@ const GanttChart: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
             if (!ganttContainerRef.current) return;
             const newPositions: Record<string, { top: number, height: number, left: number, width: number }> = {};
             const taskElements = ganttContainerRef.current.querySelectorAll('.gantt-task-row');
-            taskElements.forEach((el, index) => {
+            taskElements.forEach((el) => {
                 const taskId = el.getAttribute('data-task-id');
                 if (taskId) {
                     const rect = el.getBoundingClientRect();
-                    const containerRect = ganttContainerRef.current!.getBoundingClientRect();
-                    
                     const task = sortedTasks.find(t => t.id === taskId);
                     if (task) {
                         const taskStart = new Date(task.startDate);
-                        const taskEnd = new Date(task.endDate);
                         const startOffsetDays = (taskStart.getTime() - startDate.getTime()) / (1000 * 3600 * 24);
-                        const durationDays = (taskEnd.getTime() - taskStart.getTime()) / (1000 * 3600 * 24) + 1;
                         
-                        const left = (startOffsetDays / totalDays) * 100;
-                        const width = (durationDays / totalDays) * 100;
+                        const taskEnd = new Date(task.endDate);
+                        const durationDays = (taskEnd.getTime() - taskStart.getTime()) / (1000 * 3600 * 24) + 1;
 
                         newPositions[taskId] = {
-                            top: el.offsetTop,
+                            top: (el as HTMLElement).offsetTop,
                             height: rect.height,
-                            left,
-                            width,
+                            left: 150 + startOffsetDays * 40, // start pixel
+                            width: durationDays * 40, // width in pixels
                         };
                     }
                 }
@@ -86,8 +82,8 @@ const GanttChart: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
     
     return (
         <Card title="Diagrama de Gantt">
-            <div className="relative overflow-x-auto" ref={ganttContainerRef}>
-                <div className="grid" style={{ gridTemplateColumns: `150px repeat(${totalDays}, minmax(40px, 1fr))`, width: `${150 + totalDays * 40}px` }}>
+            <div className="overflow-x-auto" ref={ganttContainerRef}>
+                <div className="grid relative" style={{ gridTemplateColumns: `150px repeat(${totalDays}, minmax(40px, 1fr))`, width: `${150 + totalDays * 40}px` }}>
                     {/* Header */}
                     <div className="sticky left-0 bg-white z-10 border-b border-r font-semibold p-2 text-sm text-black">Tarea</div>
                     {days.map((day, i) => (
@@ -98,7 +94,7 @@ const GanttChart: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
                     ))}
 
                     {/* Task Rows */}
-                    {sortedTasks.map((task, index) => (
+                    {sortedTasks.map((task) => (
                         <React.Fragment key={task.id}>
                             <div 
                                 data-task-id={task.id}
@@ -106,7 +102,7 @@ const GanttChart: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
                             >
                                 {task.name}
                             </div>
-                            <div className="col-span-full" style={{ gridColumn: `2 / span ${totalDays}` }}>
+                            <div className="col-span-full border-b" style={{ gridColumn: `2 / span ${totalDays}` }}>
                                 {(() => {
                                     const startOffset = (new Date(task.startDate).getTime() - startDate.getTime()) / (1000 * 3600 * 24);
                                     const duration = (new Date(task.endDate).getTime() - new Date(task.startDate).getTime()) / (1000 * 3600 * 24) + 1;
@@ -114,7 +110,7 @@ const GanttChart: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
                                     const statusColor = task.status === 'Completado' ? 'bg-green-500' : task.status === 'En Progreso' ? 'bg-blue-500' : task.status === 'Retrasado' ? 'bg-red-500' : 'bg-gray-400';
                                     
                                     return (
-                                        <div className="relative h-full border-b">
+                                        <div className="relative h-full">
                                             <div
                                                 title={`${task.name}: ${new Date(task.startDate).toLocaleDateString()} - ${new Date(task.endDate).toLocaleDateString()}`}
                                                 className={`absolute my-2 rounded-md h-6 ${statusColor} opacity-70`}
@@ -128,41 +124,43 @@ const GanttChart: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
                             </div>
                         </React.Fragment>
                     ))}
+                    {/* Today Marker */}
+                    {todayOffset >= 0 && todayOffset <= totalDays && (
+                        <div 
+                            ref={todayRef}
+                            className="absolute top-0 bottom-0 border-r-2 border-red-500 z-20" 
+                            style={{ left: `${150 + todayOffset * 40}px` }}
+                            title={`Hoy: ${today.toLocaleDateString()}`}
+                        >
+                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs px-1 rounded-sm whitespace-nowrap">Hoy</div>
+                        </div>
+                    )}
+                    {/* Dependency Lines */}
+                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 15 }}>
+                        <defs>
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+                            </marker>
+                        </defs>
+                        {sortedTasks.map(task => {
+                            if (!task.dependsOn || !taskPositions[task.id]) return null;
+                            return task.dependsOn.map(depId => {
+                                const fromTaskPos = taskPositions[depId];
+                                const toTaskPos = taskPositions[task.id];
+                                if (!fromTaskPos || !toTaskPos) return null;
+
+                                const fromX = fromTaskPos.left + fromTaskPos.width;
+                                const fromY = fromTaskPos.top + fromTaskPos.height / 2;
+                                const toX = toTaskPos.left;
+                                const toY = toTaskPos.top + toTaskPos.height / 2;
+                                
+                                if(toX <= fromX) return null; // Don't draw line if dependency is invalid
+
+                                return <path key={`${depId}-${task.id}`} d={`M ${fromX} ${fromY} H ${fromX + 20} V ${toY} H ${toX}`} stroke="#333" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead)" />;
+                            });
+                        })}
+                    </svg>
                 </div>
-                 {/* Today Marker */}
-                {todayOffset >= 0 && todayOffset <= totalDays && (
-                    <div 
-                        ref={todayRef}
-                        className="absolute top-0 bottom-0 border-r-2 border-red-500 z-20" 
-                        style={{ left: `calc(150px + ${todayOffset * 40}px)`, width: '40px' }}
-                        title={`Hoy: ${today.toLocaleDateString()}`}
-                    >
-                         <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs px-1 rounded-sm">Hoy</div>
-                    </div>
-                )}
-                 {/* Dependency Lines */}
-                 <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 15 }}>
-                    <defs>
-                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
-                        </marker>
-                    </defs>
-                    {sortedTasks.map(task => {
-                        if (!task.dependsOn || !taskPositions[task.id]) return null;
-                        return task.dependsOn.map(depId => {
-                            const fromTaskPos = taskPositions[depId];
-                            const toTaskPos = taskPositions[task.id];
-                            if (!fromTaskPos || !toTaskPos) return null;
-
-                            const fromX = `calc(${fromTaskPos.left}% + ${fromTaskPos.width}%)`;
-                            const fromY = fromTaskPos.top + fromTaskPos.height / 2;
-                            const toX = `${toTaskPos.left}%`;
-                            const toY = toTaskPos.top + toTaskPos.height / 2;
-
-                            return <path key={`${depId}-${task.id}`} d={`M ${fromX} ${fromY} L ${toX} ${toY}`} stroke="#333" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead)" />;
-                        });
-                    })}
-                </svg>
             </div>
         </Card>
     );

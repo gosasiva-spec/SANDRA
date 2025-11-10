@@ -1,6 +1,6 @@
 
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialBudgetCategories, initialExpenses } from '../constants';
 import { BudgetCategory, Expense } from '../types';
@@ -16,6 +16,11 @@ const Budget: React.FC = () => {
     const [budgetCategories, setBudgetCategories] = useLocalStorage<BudgetCategory[]>(`constructpro_project_${activeProjectId}_budgetCategories`, initialBudgetCategories);
     const [expenses, setExpenses] = useLocalStorage<Expense[]>(`constructpro_project_${activeProjectId}_expenses`, initialExpenses);
     
+    // State for overall project budget
+    const [totalProjectBudget, setTotalProjectBudget] = useLocalStorage<number | null>(`constructpro_project_${activeProjectId}_totalBudget`, null);
+    const [isEditingBudget, setIsEditingBudget] = useState(false);
+    const [editingBudgetValue, setEditingBudgetValue] = useState('');
+
     // State for expense modal
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
     const [newExpense, setNewExpense] = useState<Partial<Expense>>({date: new Date().toISOString().split('T')[0]});
@@ -25,10 +30,18 @@ const Budget: React.FC = () => {
     const [currentCategory, setCurrentCategory] = useState<Partial<BudgetCategory>>({});
     const [isEditingCategory, setIsEditingCategory] = useState(false);
 
-
-    const totalAllocated = budgetCategories.reduce((acc, cat) => acc + cat.allocated, 0);
+    const totalAllocatedFromCategories = budgetCategories.reduce((acc, cat) => acc + cat.allocated, 0);
+    const displayTotalBudget = totalProjectBudget ?? totalAllocatedFromCategories;
     const totalSpent = expenses.reduce((acc, exp) => acc + exp.amount, 0);
     
+    useEffect(() => {
+        if (totalProjectBudget === null) {
+            setEditingBudgetValue(totalAllocatedFromCategories.toString());
+        } else {
+            setEditingBudgetValue(totalProjectBudget.toString());
+        }
+    }, [totalProjectBudget, totalAllocatedFromCategories]);
+
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
     const expenseChartData = budgetCategories.map(cat => ({
         name: cat.name,
@@ -72,6 +85,18 @@ const Budget: React.FC = () => {
         }
     };
 
+    // Handlers for editing total budget
+    const handleEditBudget = () => {
+        const value = parseFloat(editingBudgetValue);
+        if (!isNaN(value) && value >= 0) {
+            setTotalProjectBudget(value);
+            setIsEditingBudget(false);
+        } else {
+            // Optionally reset to the last valid value or show an error
+            setEditingBudgetValue(displayTotalBudget.toString());
+        }
+    };
+
 
     return (
         <div>
@@ -85,8 +110,35 @@ const Budget: React.FC = () => {
             <Card className="mb-6">
                 <div className="flex flex-col md:flex-row justify-between items-center text-center md:text-left">
                     <div className="mb-4 md:mb-0">
-                        <p className="text-black">Presupuesto Total</p>
-                        <p className="text-4xl font-bold text-black">${totalAllocated.toLocaleString()}</p>
+                        <div className="flex items-center gap-2 justify-center md:justify-start">
+                            <p className="text-black">Presupuesto Total</p>
+                            {!isEditingBudget && (
+                                <button onClick={() => setIsEditingBudget(true)} title="Editar presupuesto total" className="text-black hover:text-gray-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L13.196 5.232z" /></svg>
+                                </button>
+                            )}
+                        </div>
+
+                        {isEditingBudget ? (
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-2xl font-bold text-black self-center">$</span>
+                                <input 
+                                    type="number"
+                                    value={editingBudgetValue}
+                                    onChange={(e) => setEditingBudgetValue(e.target.value)}
+                                    onBlur={handleEditBudget}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleEditBudget()}
+                                    className="text-4xl font-bold text-black bg-white border border-primary-300 rounded-md w-48 text-center"
+                                    autoFocus
+                                />
+                                <button onClick={handleEditBudget} className="p-1 bg-green-500 text-white rounded-full hover:bg-green-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                </button>
+                            </div>
+                        ) : (
+                            <p className="text-4xl font-bold text-black">${displayTotalBudget.toLocaleString()}</p>
+                        )}
+                         <p className="text-xs text-gray-500 mt-1">Total Asignado en Categorías: ${totalAllocatedFromCategories.toLocaleString()}</p>
                     </div>
                      <div className="mb-4 md:mb-0">
                         <p className="text-black">Total Gastado</p>
@@ -94,11 +146,11 @@ const Budget: React.FC = () => {
                     </div>
                      <div>
                         <p className="text-black">Restante</p>
-                        <p className="text-4xl font-bold text-black">${(totalAllocated - totalSpent).toLocaleString()}</p>
+                        <p className={`text-4xl font-bold ${(displayTotalBudget - totalSpent) < 0 ? 'text-red-600' : 'text-black'}`}>${(displayTotalBudget - totalSpent).toLocaleString()}</p>
                     </div>
                 </div>
                  <div className="mt-4">
-                    <ProgressBar value={totalAllocated > 0 ? (totalSpent / totalAllocated) * 100 : 0} color={ totalAllocated > 0 && (totalSpent/totalAllocated) > 0.9 ? 'red' : totalAllocated > 0 && (totalSpent/totalAllocated) > 0.75 ? 'yellow' : 'blue'} />
+                    <ProgressBar value={displayTotalBudget > 0 ? (totalSpent / displayTotalBudget) * 100 : 0} color={ displayTotalBudget > 0 && (totalSpent/displayTotalBudget) > 0.9 ? 'red' : displayTotalBudget > 0 && (totalSpent/displayTotalBudget) > 0.75 ? 'yellow' : 'blue'} />
                 </div>
             </Card>
 

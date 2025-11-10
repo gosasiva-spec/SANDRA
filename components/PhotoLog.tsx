@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { initialPhotos } from '../constants';
-import { Photo } from '../types';
+import { initialPhotos, initialTasks } from '../constants';
+import { Photo, Task } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
 import { useProject } from '../contexts/ProjectContext';
@@ -10,6 +10,7 @@ import { useProject } from '../contexts/ProjectContext';
 const PhotoLog: React.FC = () => {
     const { activeProjectId } = useProject();
     const [photos, setPhotos] = useLocalStorage<Photo[]>(`constructpro_project_${activeProjectId}_photos`, initialPhotos);
+    const [tasks] = useLocalStorage<Task[]>(`constructpro_project_${activeProjectId}_tasks`, initialTasks);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [newPhoto, setNewPhoto] = useState<Partial<Photo>>({ tags: [] });
@@ -50,6 +51,8 @@ const PhotoLog: React.FC = () => {
         photo.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         photo.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
     ).sort((a,b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+    
+    const linkedTasks = selectedPhoto ? tasks.filter(task => task.photoIds?.includes(selectedPhoto.id)) : [];
 
     return (
         <div>
@@ -102,13 +105,27 @@ const PhotoLog: React.FC = () => {
 
             {selectedPhoto && (
                  <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Detalles de la Foto">
-                    <img src={selectedPhoto.url} alt={selectedPhoto.description} className="w-full max-h-96 object-contain rounded-lg mb-4"/>
-                    <h3 className="text-lg font-semibold text-black">{selectedPhoto.description}</h3>
-                    <p className="text-sm text-black mb-2">Subido el: {new Date(selectedPhoto.uploadDate).toLocaleString()}</p>
-                    <div className="flex flex-wrap gap-2">
-                        {selectedPhoto.tags.map(tag => (
-                            <span key={tag} className="px-2 py-1 bg-blue-100 text-black text-xs font-semibold rounded-full">{tag}</span>
-                        ))}
+                    <img src={selectedPhoto.url} alt={selectedPhoto.description} className="w-full max-h-80 object-contain rounded-lg mb-4"/>
+                    <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-black">{selectedPhoto.description}</h3>
+                        <p className="text-sm text-black">Subido el: {new Date(selectedPhoto.uploadDate).toLocaleString()}</p>
+                        {selectedPhoto.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {selectedPhoto.tags.map(tag => (
+                                    <span key={tag} className="px-2 py-1 bg-blue-100 text-black text-xs font-semibold rounded-full">{tag}</span>
+                                ))}
+                            </div>
+                        )}
+                        {linkedTasks.length > 0 && (
+                            <div className="pt-3 border-t">
+                                <h4 className="font-semibold text-black">Vinculado a Tareas:</h4>
+                                <ul className="list-disc list-inside mt-1 text-black">
+                                    {linkedTasks.map(task => (
+                                        <li key={task.id}>{task.name}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </div>
                  </Modal>
             )}

@@ -27,13 +27,46 @@ const Labor: React.FC = () => {
         return { name: worker.name, horas: hoursLogged };
     });
 
+    const handleOpenWorkerModal = (worker?: Worker) => {
+        if (worker) {
+            setCurrentWorker(worker);
+            setIsEditingWorker(true);
+        } else {
+            setCurrentWorker({ name: '', role: '', hourlyRate: 0 });
+            setIsEditingWorker(false);
+        }
+        setIsWorkerModalOpen(true);
+    };
+
     const handleSaveWorker = () => {
+        if (!currentWorker.name || !currentWorker.role || currentWorker.hourlyRate === undefined || currentWorker.hourlyRate < 0) {
+            alert('Por favor, complete todos los campos correctamente.');
+            return;
+        }
+
         if (isEditingWorker) {
             setWorkers(workers.map(w => w.id === currentWorker.id ? currentWorker as Worker : w));
         } else {
             setWorkers([...workers, { ...currentWorker, id: `wrk-${Date.now()}` } as Worker]);
         }
         setIsWorkerModalOpen(false);
+    };
+    
+    const handleDeleteWorker = (workerId: string) => {
+        const workerToDelete = workers.find(w => w.id === workerId);
+        if (!workerToDelete) return;
+
+        const isAssignedToTask = tasks.some(task => task.assignedWorkerId === workerId);
+        const hasTimeLogs = timeLogs.some(log => log.workerId === workerId);
+
+        if (isAssignedToTask || hasTimeLogs) {
+            alert(`No se puede eliminar a "${workerToDelete.name}" porque tiene tareas asignadas o registros de tiempo. Por favor, reasigne las tareas y elimine los registros de tiempo asociados antes de eliminar al trabajador.`);
+            return;
+        }
+
+        if (window.confirm(`¿Estás seguro de que quieres eliminar a "${workerToDelete.name}"?`)) {
+            setWorkers(workers.filter(w => w.id !== workerId));
+        }
     };
 
     const handleSaveTimeLog = () => {
@@ -58,7 +91,7 @@ const Labor: React.FC = () => {
                     <button onClick={() => setIsTimeLogModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors mr-2">
                         Registrar Horas
                     </button>
-                    <button onClick={() => { setIsEditingWorker(false); setCurrentWorker({}); setIsWorkerModalOpen(true); }} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
+                    <button onClick={() => handleOpenWorkerModal()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
                         Añadir Trabajador
                     </button>
                 </div>
@@ -66,38 +99,45 @@ const Labor: React.FC = () => {
 
             <Card className="mb-8">
                 <h3 className="text-xl font-semibold text-black mb-4">Trabajadores</h3>
-                <table className="w-full text-left">
-                    <thead>
-                        <tr className="border-b bg-gray-50">
-                            <th className="p-3">Nombre</th>
-                            <th className="p-3">Cargo</th>
-                            <th className="p-3">Tarifa por Hora</th>
-                            <th className="p-3">Horas Totales</th>
-                            <th className="p-3">Costo Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {workers.map(worker => {
-                            const totalHours = timeLogs.filter(log => log.workerId === worker.id).reduce((acc, log) => acc + log.hours, 0);
-                            const totalCost = totalHours * worker.hourlyRate;
-                            return (
-                                <tr key={worker.id} className="border-b hover:bg-gray-50">
-                                    <td className="p-3 font-medium">{worker.name}</td>
-                                    <td className="p-3">{worker.role}</td>
-                                    <td className="p-3">${worker.hourlyRate.toFixed(2)}</td>
-                                    <td className="p-3">{totalHours}</td>
-                                    <td className="p-3 font-semibold">${totalCost.toFixed(2)}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                    <tfoot>
-                        <tr className="border-t-2 border-gray-300 bg-gray-100">
-                            <td colSpan={4} className="p-3 text-right font-bold text-black">Costo Total de Mano de Obra:</td>
-                            <td className="p-3 font-bold text-lg text-black">${totalLaborCost.toFixed(2)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+                 <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="border-b bg-gray-50">
+                                <th className="p-3">Nombre</th>
+                                <th className="p-3">Cargo</th>
+                                <th className="p-3">Tarifa por Hora</th>
+                                <th className="p-3">Horas Totales</th>
+                                <th className="p-3">Costo Total</th>
+                                <th className="p-3">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {workers.map(worker => {
+                                const totalHours = timeLogs.filter(log => log.workerId === worker.id).reduce((acc, log) => acc + log.hours, 0);
+                                const totalCost = totalHours * worker.hourlyRate;
+                                return (
+                                    <tr key={worker.id} className="border-b hover:bg-gray-50">
+                                        <td className="p-3 font-medium">{worker.name}</td>
+                                        <td className="p-3">{worker.role}</td>
+                                        <td className="p-3">${worker.hourlyRate.toFixed(2)}</td>
+                                        <td className="p-3">{totalHours}</td>
+                                        <td className="p-3 font-semibold">${totalCost.toFixed(2)}</td>
+                                        <td className="p-3 whitespace-nowrap">
+                                            <button onClick={() => handleOpenWorkerModal(worker)} className="text-black hover:text-gray-600 font-medium">Editar</button>
+                                            <button onClick={() => handleDeleteWorker(worker.id)} className="ml-4 text-red-600 hover:text-red-800 font-medium">Eliminar</button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        <tfoot>
+                            <tr className="border-t-2 border-gray-300 bg-gray-100">
+                                <td colSpan={5} className="p-3 text-right font-bold text-black">Costo Total de Mano de Obra:</td>
+                                <td className="p-3 font-bold text-lg text-black">${totalLaborCost.toFixed(2)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </Card>
 
             <Card title="Productividad del Trabajador (Horas Registradas)">
@@ -115,11 +155,11 @@ const Labor: React.FC = () => {
                 </div>
             </Card>
 
-            <Modal isOpen={isWorkerModalOpen} onClose={() => setIsWorkerModalOpen(false)} title="Añadir/Editar Trabajador">
+            <Modal isOpen={isWorkerModalOpen} onClose={() => setIsWorkerModalOpen(false)} title={isEditingWorker ? 'Editar Trabajador' : 'Añadir Trabajador'}>
                 <div className="space-y-4">
                     <input type="text" placeholder="Nombre" value={currentWorker.name || ''} onChange={e => setCurrentWorker({...currentWorker, name: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
                     <input type="text" placeholder="Cargo" value={currentWorker.role || ''} onChange={e => setCurrentWorker({...currentWorker, role: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
-                    <input type="number" placeholder="Tarifa por Hora" value={currentWorker.hourlyRate || ''} onChange={e => setCurrentWorker({...currentWorker, hourlyRate: parseFloat(e.target.value)})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <input type="number" placeholder="Tarifa por Hora" value={currentWorker.hourlyRate ?? ''} onChange={e => setCurrentWorker({...currentWorker, hourlyRate: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
                     <button onClick={handleSaveWorker} className="w-full py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Guardar Trabajador</button>
                 </div>
             </Modal>

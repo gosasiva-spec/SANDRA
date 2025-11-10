@@ -35,7 +35,10 @@ const Dashboard: React.FC = () => {
     return { name: cat.name, Asignado: cat.allocated, Gastado: spent };
   });
 
-  const upcomingTasks = tasks.filter(t => t.status !== 'Completado').slice(0, 5);
+  const upcomingTasks = [...tasks]
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+    .slice(0, 5);
+    
   const taskStatusCounts = upcomingTasks.reduce((acc, task) => {
     const status = task.status;
     acc[status] = (acc[status] || 0) + 1;
@@ -46,12 +49,14 @@ const Dashboard: React.FC = () => {
       { name: 'No Iniciado', Tareas: taskStatusCounts['No Iniciado'] || 0 },
       { name: 'En Progreso', Tareas: taskStatusCounts['En Progreso'] || 0 },
       { name: 'Retrasado', Tareas: taskStatusCounts['Retrasado'] || 0 },
+      { name: 'Completado', Tareas: taskStatusCounts['Completado'] || 0 },
   ].filter(item => item.Tareas > 0);
 
   const TASK_STATUS_COLORS: { [key: string]: string } = {
       'No Iniciado': '#a1a1aa',
       'En Progreso': '#3b82f6',
       'Retrasado': '#ef4444',
+      'Completado': '#22c55e',
   };
   
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
