@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialBudgetCategories, initialExpenses } from '../constants';
@@ -23,7 +22,8 @@ const Budget: React.FC = () => {
 
     // State for expense modal
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-    const [newExpense, setNewExpense] = useState<Partial<Expense>>({date: new Date().toISOString().split('T')[0]});
+    const [currentExpense, setCurrentExpense] = useState<Partial<Expense>>({});
+    const [isEditingExpense, setIsEditingExpense] = useState(false);
 
     // State for category modal
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -48,11 +48,38 @@ const Budget: React.FC = () => {
         value: expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0)
     })).filter(d => d.value > 0);
 
+    const handleOpenExpenseModal = (expense?: Expense) => {
+        if (expense) {
+            setCurrentExpense(expense);
+            setIsEditingExpense(true);
+        } else {
+            setCurrentExpense({ date: new Date().toISOString().split('T')[0] });
+            setIsEditingExpense(false);
+        }
+        setIsExpenseModalOpen(true);
+    };
+
+    const handleCloseExpenseModal = () => {
+        setIsExpenseModalOpen(false);
+        setCurrentExpense({});
+        setIsEditingExpense(false);
+    };
+
     const handleSaveExpense = () => {
-        if (newExpense.description && newExpense.amount && newExpense.categoryId) {
-            setExpenses([...expenses, { ...newExpense, id: `exp-${Date.now()}` } as Expense]);
-            setIsExpenseModalOpen(false);
-            setNewExpense({date: new Date().toISOString().split('T')[0]});
+        if (currentExpense.description && currentExpense.amount && currentExpense.categoryId) {
+            if (isEditingExpense) {
+                setExpenses(expenses.map(exp => exp.id === currentExpense.id ? currentExpense as Expense : exp));
+            } else {
+                setExpenses([...expenses, { ...currentExpense, id: `exp-${Date.now()}` } as Expense]);
+            }
+            handleCloseExpenseModal();
+        }
+    };
+    
+    const handleDeleteExpense = (expenseId: string) => {
+        const expenseToDelete = expenses.find(e => e.id === expenseId);
+        if (expenseToDelete && window.confirm(`¿Estás seguro de que quieres eliminar el gasto "${expenseToDelete.description}"?`)) {
+            setExpenses(expenses.filter(e => e.id !== expenseId));
         }
     };
     
@@ -102,7 +129,7 @@ const Budget: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-semibold text-black">Control de Presupuesto</h2>
-                <button onClick={() => setIsExpenseModalOpen(true)} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
+                <button onClick={() => handleOpenExpenseModal()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
                     Añadir Gasto
                 </button>
             </div>
@@ -164,6 +191,7 @@ const Budget: React.FC = () => {
                                     <th className="p-3">Descripción</th>
                                     <th className="p-3">Categoría</th>
                                     <th className="p-3 text-right">Monto</th>
+                                    <th className="p-3 text-center">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -173,6 +201,10 @@ const Budget: React.FC = () => {
                                         <td className="p-3 font-medium">{exp.description}</td>
                                         <td className="p-3">{budgetCategories.find(c => c.id === exp.categoryId)?.name}</td>
                                         <td className="p-3 text-right font-semibold">${exp.amount.toFixed(2)}</td>
+                                        <td className="p-3 text-center whitespace-nowrap">
+                                            <button onClick={() => handleOpenExpenseModal(exp)} className="text-black hover:text-gray-600 font-medium text-sm">Editar</button>
+                                            <button onClick={() => handleDeleteExpense(exp.id)} className="ml-3 text-red-600 hover:text-red-800 font-medium text-sm">Eliminar</button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -228,15 +260,15 @@ const Budget: React.FC = () => {
                 </div>
             </div>
 
-            <Modal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} title="Añadir Nuevo Gasto">
+            <Modal isOpen={isExpenseModalOpen} onClose={handleCloseExpenseModal} title={isEditingExpense ? 'Editar Gasto' : 'Añadir Nuevo Gasto'}>
                 <div className="space-y-4">
-                    <input type="text" placeholder="Descripción" value={newExpense.description || ''} onChange={e => setNewExpense({...newExpense, description: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
-                    <input type="number" placeholder="Monto" value={newExpense.amount || ''} onChange={e => setNewExpense({...newExpense, amount: parseFloat(e.target.value)})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
-                    <select value={newExpense.categoryId || ''} onChange={e => setNewExpense({...newExpense, categoryId: e.target.value})} className="w-full p-2 border rounded bg-white text-black">
+                    <input type="text" placeholder="Descripción" value={currentExpense.description || ''} onChange={e => setCurrentExpense({...currentExpense, description: e.target.value})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <input type="number" placeholder="Monto" value={currentExpense.amount || ''} onChange={e => setCurrentExpense({...currentExpense, amount: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <select value={currentExpense.categoryId || ''} onChange={e => setCurrentExpense({...currentExpense, categoryId: e.target.value})} className="w-full p-2 border rounded bg-white text-black">
                         <option value="">Seleccionar Categoría</option>
                         {budgetCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                     </select>
-                    <input type="date" value={newExpense.date || ''} onChange={e => setNewExpense({...newExpense, date: e.target.value})} className="w-full p-2 border rounded bg-white text-black" />
+                    <input type="date" value={currentExpense.date || ''} onChange={e => setCurrentExpense({...currentExpense, date: e.target.value})} className="w-full p-2 border rounded bg-white text-black" />
                     <button onClick={handleSaveExpense} className="w-full py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Guardar Gasto</button>
                 </div>
             </Modal>

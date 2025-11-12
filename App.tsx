@@ -59,6 +59,7 @@ interface AppContentProps {
 const AppContent: React.FC<AppContentProps> = ({ onLogout, currentUser }) => {
   const { activeProject, unlockedProjects, unlockProject, isReady, projects } = useProject();
   const [currentView, setCurrentView] = useState<View>('Panel');
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   
   // Si no hay proyectos para el usuario, renderiza un estado especial
   if (isReady && projects.length === 0) {
@@ -66,12 +67,19 @@ const AppContent: React.FC<AppContentProps> = ({ onLogout, currentUser }) => {
         <div className="flex h-screen bg-gray-100 font-sans">
             <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
             <div className="flex-1 flex flex-col overflow-hidden">
-                <ProjectHeader onLogout={onLogout} currentUser={currentUser} />
+                <ProjectHeader onLogout={onLogout} currentUser={currentUser} isManageModalOpen={isManageModalOpen} setIsManageModalOpen={setIsManageModalOpen} />
                 <main className="flex-1 flex items-center justify-center bg-gray-100">
-                    <div className="text-center">
-                        <h2 className="text-2xl font-semibold text-black">Bienvenido, {currentUser.name}.</h2>
-                        <p className="mt-2 text-black">No tienes proyectos todavía. ¡Crea uno para empezar!</p>
-                        {/* El botón para crear proyectos está en ProjectHeader */}
+                    <div className="text-center p-8">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-16 w-16 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 4h5m-5 4h5" /></svg>
+                        <h2 className="mt-4 text-3xl font-bold text-black">Bienvenido, {currentUser.name}.</h2>
+                        <p className="mt-2 text-lg text-black">Parece que es tu primera vez aquí. No tienes proyectos todavía.</p>
+                        <p className="mt-1 text-black">¡Crea uno para empezar a gestionar tu obra!</p>
+                        <button 
+                            onClick={() => setIsManageModalOpen(true)}
+                            className="mt-6 px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg shadow-md hover:bg-primary-700 transition-colors text-lg"
+                        >
+                            Crear tu Primer Proyecto
+                        </button>
                     </div>
                 </main>
             </div>
@@ -124,7 +132,7 @@ const AppContent: React.FC<AppContentProps> = ({ onLogout, currentUser }) => {
     <div className="flex h-screen bg-gray-100 font-sans print:block print:h-auto">
       <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
       <div className="flex-1 flex flex-col overflow-hidden print:overflow-visible print:block">
-        <ProjectHeader onLogout={onLogout} currentUser={currentUser} />
+        <ProjectHeader onLogout={onLogout} currentUser={currentUser} isManageModalOpen={isManageModalOpen} setIsManageModalOpen={setIsManageModalOpen}/>
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 print:overflow-visible print:block">
           <div className="container mx-auto px-6 py-8">
             {renderView()}

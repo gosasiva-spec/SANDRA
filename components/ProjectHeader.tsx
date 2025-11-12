@@ -6,12 +6,13 @@ import { User } from '../types';
 interface ProjectHeaderProps {
     onLogout: () => void;
     currentUser: User;
+    isManageModalOpen: boolean;
+    setIsManageModalOpen: (isOpen: boolean) => void;
 }
 
-const ProjectHeader: React.FC<ProjectHeaderProps> = ({ onLogout, currentUser }) => {
+const ProjectHeader: React.FC<ProjectHeaderProps> = ({ onLogout, currentUser, isManageModalOpen, setIsManageModalOpen }) => {
     const { activeProject, projects, switchProject, createProject, updateProject, deleteProject, activeProjectId } = useProject();
     
-    const [isManageModalOpen, setIsManageModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     
     const [newProjectName, setNewProjectName] = useState('');
