@@ -39,6 +39,7 @@ export interface Task {
   volumeUnit?: string;
   photoIds?: string[];
   dependsOn?: string[];
+  totalValue?: number;
 }
 
 export interface TimeLog {

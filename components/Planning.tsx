@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialTasks, initialWorkers, initialPhotos } from '../constants';
 import { Task, Worker, Photo } from '../types';
@@ -6,162 +6,349 @@ import Card from './ui/Card';
 import Modal from './ui/Modal';
 import ProgressBar from './ui/ProgressBar';
 import { useProject } from '../contexts/ProjectContext';
+import { addDays, format, differenceInDays, startOfWeek, startOfMonth, addWeeks, addMonths, endOfWeek, endOfMonth } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-const GanttChart: React.FC<{ tasks: Task[] }> = ({ tasks }) => {
+
+type TimeScale = 'day' | 'week' | 'month';
+
+const GanttChart: React.FC<{ 
+    tasks: Task[]; 
+    setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+}> = ({ tasks, setTasks }) => {
     const ganttContainerRef = useRef<HTMLDivElement>(null);
-    const todayRef = useRef<HTMLDivElement>(null);
-    const [taskPositions, setTaskPositions] = useState<Record<string, { top: number, height: number, left: number, width: number }>>({});
+    const [timeScale, setTimeScale] = useState<TimeScale>('day');
+    const [taskPositions, setTaskPositions] = useState<Record<string, { top: number, height: number }>>({});
+    
+    // State for drag and drop functionality
+    const [dragInfo, setDragInfo] = useState<{
+        task: Task;
+        action: 'move' | 'resize-end' | 'resize-start';
+        initialMouseX: number;
+        initialStartDate: Date;
+        initialEndDate: Date;
+    } | null>(null);
+    const [tooltip, setTooltip] = useState<{ x: number, y: number, text: string } | null>(null);
 
     const sortedTasks = useMemo(() => [...tasks].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()), [tasks]);
 
-    const { startDate, endDate, totalDays } = useMemo(() => {
+    const { overallStartDate, overallEndDate } = useMemo(() => {
         if (sortedTasks.length === 0) {
             const now = new Date();
-            const start = new Date(now);
-            const end = new Date(now);
-            end.setDate(end.getDate() + 30);
-            return { startDate: start, endDate: end, totalDays: 30 };
+            return { overallStartDate: startOfWeek(now), overallEndDate: endOfWeek(addWeeks(now, 4)) };
         }
         const startDates = sortedTasks.map(t => new Date(t.startDate).getTime());
         const endDates = sortedTasks.map(t => new Date(t.endDate).getTime());
         const minTime = Math.min(...startDates);
         const maxTime = Math.max(...endDates);
-        const startDate = new Date(minTime);
-        const endDate = new Date(maxTime);
-        const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
-        return { startDate, endDate, totalDays: totalDays <= 0 ? 1 : totalDays };
+        return { overallStartDate: startOfWeek(new Date(minTime)), overallEndDate: endOfWeek(new Date(maxTime)) };
     }, [sortedTasks]);
 
-    useEffect(() => {
-        if (todayRef.current) {
-            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    const columnWidth = useMemo(() => {
+        switch (timeScale) {
+            case 'day': return 40;
+            case 'week': return 100;
+            case 'month': return 200;
         }
-    }, [startDate]); // Scroll to today on initial load
+    }, [timeScale]);
+
+    const gridDates = useMemo(() => {
+        const dates = [];
+        let currentDate = overallStartDate;
+        while (currentDate <= overallEndDate) {
+            dates.push(currentDate);
+            switch (timeScale) {
+                case 'day': currentDate = addDays(currentDate, 1); break;
+                case 'week': currentDate = addWeeks(currentDate, 1); break;
+                case 'month': currentDate = addMonths(currentDate, 1); break;
+            }
+        }
+        return dates;
+    }, [overallStartDate, overallEndDate, timeScale]);
+    
+    const dateToPixel = useCallback((date: Date) => {
+        let units = 0;
+        switch (timeScale) {
+            case 'day': units = differenceInDays(date, overallStartDate); break;
+            case 'week': units = differenceInDays(date, overallStartDate) / 7; break;
+            case 'month': units = differenceInDays(date, overallStartDate) / 30.44; break;
+        }
+        return units * columnWidth;
+    }, [overallStartDate, timeScale, columnWidth]);
+    
+    const pixelToDate = useCallback((pixel: number) => {
+        let daysToAdd = 0;
+        switch (timeScale) {
+            case 'day': daysToAdd = pixel / columnWidth; break;
+            case 'week': daysToAdd = (pixel / columnWidth) * 7; break;
+            case 'month': daysToAdd = (pixel / columnWidth) * 30.44; break;
+        }
+        return addDays(overallStartDate, daysToAdd);
+    }, [overallStartDate, timeScale, columnWidth]);
+
+    // Update dependency line positions
+    useEffect(() => {
+        if (!ganttContainerRef.current) return;
+        const newPositions: Record<string, { top: number, height: number }> = {};
+        const taskElements = ganttContainerRef.current.querySelectorAll('.gantt-task-row');
+        taskElements.forEach((el) => {
+            const taskId = el.getAttribute('data-task-id');
+            if (taskId) {
+                newPositions[taskId] = { top: (el as HTMLElement).offsetTop, height: el.getBoundingClientRect().height };
+            }
+        });
+        setTaskPositions(newPositions);
+    }, [sortedTasks]);
+
+    const handleMouseDown = (e: React.MouseEvent, task: Task, action: 'move' | 'resize-end' | 'resize-start') => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.body.style.cursor = action === 'move' ? 'move' : 'ew-resize';
+        setDragInfo({
+            task,
+            action,
+            initialMouseX: e.clientX,
+            initialStartDate: new Date(task.startDate),
+            initialEndDate: new Date(task.endDate),
+        });
+    };
+
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (!dragInfo) return;
+
+        const deltaX = e.clientX - dragInfo.initialMouseX;
+        let newStartDate = new Date(dragInfo.initialStartDate);
+        let newEndDate = new Date(dragInfo.initialEndDate);
+
+        if (dragInfo.action === 'move') {
+            const daysChanged = deltaX / (columnWidth / (timeScale === 'day' ? 1 : timeScale === 'week' ? 7 : 30.44));
+            newStartDate = addDays(dragInfo.initialStartDate, daysChanged);
+            newEndDate = addDays(dragInfo.initialEndDate, daysChanged);
+        } else if (dragInfo.action === 'resize-end') {
+            const daysChanged = deltaX / (columnWidth / (timeScale === 'day' ? 1 : timeScale === 'week' ? 7 : 30.44));
+            newEndDate = addDays(dragInfo.initialEndDate, daysChanged);
+            if (newEndDate < newStartDate) newEndDate = newStartDate;
+        } else if (dragInfo.action === 'resize-start') {
+            const daysChanged = deltaX / (columnWidth / (timeScale === 'day' ? 1 : timeScale === 'week' ? 7 : 30.44));
+            newStartDate = addDays(dragInfo.initialStartDate, daysChanged);
+            if (newStartDate > newEndDate) newStartDate = newEndDate;
+        }
+        
+        const formatStr = "dd/MM/yyyy";
+        setTooltip({
+            x: e.clientX + 15,
+            y: e.clientY,
+            text: `${format(newStartDate, formatStr)} - ${format(newEndDate, formatStr)}`
+        });
+
+        // Visually update the dragged task bar in real-time
+        const taskBar = ganttContainerRef.current?.querySelector(`[data-bar-id="${dragInfo.task.id}"]`) as HTMLElement;
+        if (taskBar) {
+            taskBar.style.left = `${dateToPixel(newStartDate)}px`;
+            taskBar.style.width = `${dateToPixel(newEndDate) - dateToPixel(newStartDate)}px`;
+        }
+
+    }, [dragInfo, dateToPixel, columnWidth, timeScale]);
+
+    const handleMouseUp = useCallback((e: MouseEvent) => {
+        if (!dragInfo) return;
+
+        document.body.style.cursor = 'default';
+        const deltaX = e.clientX - dragInfo.initialMouseX;
+        let newStartDate = new Date(dragInfo.initialStartDate);
+        let newEndDate = new Date(dragInfo.initialEndDate);
+
+        const daysChanged = deltaX / (columnWidth / (timeScale === 'day' ? 1 : timeScale === 'week' ? 7 : 30.44));
+
+        if (dragInfo.action === 'move') {
+            newStartDate = addDays(dragInfo.initialStartDate, daysChanged);
+            newEndDate = addDays(dragInfo.initialEndDate, daysChanged);
+        } else if (dragInfo.action === 'resize-end') {
+            newEndDate = addDays(dragInfo.initialEndDate, daysChanged);
+            if (newEndDate < newStartDate) newEndDate = newStartDate;
+        } else if (dragInfo.action === 'resize-start') {
+            newStartDate = addDays(dragInfo.initialStartDate, daysChanged);
+            if (newStartDate > newEndDate) newStartDate = newEndDate;
+        }
+        
+        // --- Dependency Validation ---
+        if (dragInfo.task.dependsOn && dragInfo.task.dependsOn.length > 0) {
+            for (const depId of dragInfo.task.dependsOn) {
+                const depTask = tasks.find(t => t.id === depId);
+                if (depTask && newStartDate < new Date(depTask.endDate)) {
+                    alert(`Conflicto de dependencia: La tarea "${dragInfo.task.name}" no puede empezar antes de que termine "${depTask.name}".`);
+                    // Reset visual position
+                    const taskBar = ganttContainerRef.current?.querySelector(`[data-bar-id="${dragInfo.task.id}"]`) as HTMLElement;
+                    if (taskBar) {
+                        taskBar.style.left = `${dateToPixel(dragInfo.initialStartDate)}px`;
+                        taskBar.style.width = `${dateToPixel(dragInfo.initialEndDate) - dateToPixel(dragInfo.initialStartDate)}px`;
+                    }
+                    setDragInfo(null);
+                    setTooltip(null);
+                    return;
+                }
+            }
+        }
+        const dependentTasks = tasks.filter(t => t.dependsOn?.includes(dragInfo.task.id));
+        for (const depTask of dependentTasks) {
+            if (new Date(depTask.startDate) < newEndDate) {
+                alert(`Conflicto de dependencia: La tarea "${depTask.name}" (que depende de esta) empezaría antes de que esta termine.`);
+                 // Reset visual position
+                 const taskBar = ganttContainerRef.current?.querySelector(`[data-bar-id="${dragInfo.task.id}"]`) as HTMLElement;
+                 if (taskBar) {
+                     taskBar.style.left = `${dateToPixel(dragInfo.initialStartDate)}px`;
+                     taskBar.style.width = `${dateToPixel(dragInfo.initialEndDate) - dateToPixel(dragInfo.initialStartDate)}px`;
+                 }
+                setDragInfo(null);
+                setTooltip(null);
+                return;
+            }
+        }
+        // --- End Validation ---
+
+        const updatedTask = { 
+            ...dragInfo.task, 
+            startDate: format(newStartDate, 'yyyy-MM-dd'), 
+            endDate: format(newEndDate, 'yyyy-MM-dd') 
+        };
+
+        setTasks(currentTasks => currentTasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+        setDragInfo(null);
+        setTooltip(null);
+    }, [dragInfo, setTasks, tasks, pixelToDate, dateToPixel, columnWidth, timeScale]);
 
     useEffect(() => {
-        const calculatePositions = () => {
-            if (!ganttContainerRef.current) return;
-            const newPositions: Record<string, { top: number, height: number, left: number, width: number }> = {};
-            const taskElements = ganttContainerRef.current.querySelectorAll('.gantt-task-row');
-            taskElements.forEach((el) => {
-                const taskId = el.getAttribute('data-task-id');
-                if (taskId) {
-                    const rect = el.getBoundingClientRect();
-                    const task = sortedTasks.find(t => t.id === taskId);
-                    if (task) {
-                        const taskStart = new Date(task.startDate);
-                        const startOffsetDays = (taskStart.getTime() - startDate.getTime()) / (1000 * 3600 * 24);
-                        
-                        const taskEnd = new Date(task.endDate);
-                        const durationDays = (taskEnd.getTime() - taskStart.getTime()) / (1000 * 3600 * 24) + 1;
-
-                        newPositions[taskId] = {
-                            top: (el as HTMLElement).offsetTop,
-                            height: rect.height,
-                            left: 150 + startOffsetDays * 40, // start pixel
-                            width: durationDays * 40, // width in pixels
-                        };
-                    }
-                }
-            });
-            setTaskPositions(newPositions);
+        if (dragInfo) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        } else {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
         };
-        calculatePositions();
-        window.addEventListener('resize', calculatePositions);
-        return () => window.removeEventListener('resize', calculatePositions);
-    }, [sortedTasks, startDate, totalDays]);
-
-    const days = Array.from({ length: totalDays }, (_, i) => {
-        const date = new Date(startDate);
-        date.setDate(date.getDate() + i);
-        return date;
-    });
-
-    const today = new Date();
-    const todayOffset = (today.getTime() - startDate.getTime()) / (1000 * 3600 * 24);
+    }, [dragInfo, handleMouseMove, handleMouseUp]);
     
+    const getHeaderLabel = (date: Date) => {
+        switch (timeScale) {
+            case 'day': return <><span className="text-black">{format(date, 'd')}</span><span className="block text-gray-500">{format(date, 'MMM', { locale: es })}</span></>;
+            case 'week': return <span className="text-black text-[10px]">Semana {format(date, 'w', { locale: es })}</span>;
+            case 'month': return <span className="text-black">{format(date, 'MMMM yyyy', { locale: es })}</span>;
+        }
+    };
+    
+    const today = new Date();
+    const todayOffset = dateToPixel(today);
+
     return (
-        <Card title="Diagrama de Gantt">
-            <div className="overflow-x-auto" ref={ganttContainerRef}>
-                <div className="grid relative" style={{ gridTemplateColumns: `150px repeat(${totalDays}, minmax(40px, 1fr))`, width: `${150 + totalDays * 40}px` }}>
-                    {/* Header */}
-                    <div className="sticky left-0 bg-white z-10 border-b border-r font-semibold p-2 text-sm text-black">Tarea</div>
-                    {days.map((day, i) => (
-                        <div key={i} className="border-b border-r text-center text-xs p-1">
-                            <span className="text-black">{day.getDate()}</span>
-                            <span className="block text-gray-500">{day.toLocaleDateString('es-ES', { month: 'short' })}</span>
-                        </div>
+        <Card>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-black">Diagrama de Gantt</h3>
+                <div className="flex gap-1 p-1 bg-gray-200 rounded-md">
+                    {(['day', 'week', 'month'] as TimeScale[]).map(scale => (
+                        <button key={scale} onClick={() => setTimeScale(scale)} className={`px-3 py-1 text-sm rounded-md transition-colors ${timeScale === scale ? 'bg-white text-primary-600 shadow' : 'bg-transparent text-black'}`}>
+                            {scale === 'day' ? 'Día' : scale === 'week' ? 'Semana' : 'Mes'}
+                        </button>
                     ))}
-
-                    {/* Task Rows */}
-                    {sortedTasks.map((task) => (
-                        <React.Fragment key={task.id}>
-                            <div 
-                                data-task-id={task.id}
-                                className="gantt-task-row sticky left-0 bg-white z-10 border-b border-r p-2 text-sm font-medium truncate text-black"
-                            >
-                                {task.name}
-                            </div>
-                            <div className="col-span-full border-b" style={{ gridColumn: `2 / span ${totalDays}` }}>
-                                {(() => {
-                                    const startOffset = (new Date(task.startDate).getTime() - startDate.getTime()) / (1000 * 3600 * 24);
-                                    const duration = (new Date(task.endDate).getTime() - new Date(task.startDate).getTime()) / (1000 * 3600 * 24) + 1;
-                                    const progress = task.completedVolume && task.totalVolume ? (task.completedVolume / task.totalVolume) * 100 : task.status === 'Completado' ? 100 : 0;
-                                    const statusColor = task.status === 'Completado' ? 'bg-green-500' : task.status === 'En Progreso' ? 'bg-blue-500' : task.status === 'Retrasado' ? 'bg-red-500' : 'bg-gray-400';
-                                    
-                                    return (
-                                        <div className="relative h-full">
-                                            <div
-                                                title={`${task.name}: ${new Date(task.startDate).toLocaleDateString()} - ${new Date(task.endDate).toLocaleDateString()}`}
-                                                className={`absolute my-2 rounded-md h-6 ${statusColor} opacity-70`}
-                                                style={{ left: `${(startOffset / totalDays) * 100}%`, width: `${(duration / totalDays) * 100}%` }}
-                                            >
-                                                <div className={`${statusColor} h-full rounded-md`} style={{ width: `${progress}%` }}></div>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        </React.Fragment>
-                    ))}
-                    {/* Today Marker */}
-                    {todayOffset >= 0 && todayOffset <= totalDays && (
-                        <div 
-                            ref={todayRef}
-                            className="absolute top-0 bottom-0 border-r-2 border-red-500 z-20" 
-                            style={{ left: `${150 + todayOffset * 40}px` }}
-                            title={`Hoy: ${today.toLocaleDateString()}`}
-                        >
-                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs px-1 rounded-sm whitespace-nowrap">Hoy</div>
-                        </div>
-                    )}
-                    {/* Dependency Lines */}
-                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 15 }}>
-                        <defs>
-                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                                <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
-                            </marker>
-                        </defs>
-                        {sortedTasks.map(task => {
-                            if (!task.dependsOn || !taskPositions[task.id]) return null;
-                            return task.dependsOn.map(depId => {
-                                const fromTaskPos = taskPositions[depId];
-                                const toTaskPos = taskPositions[task.id];
-                                if (!fromTaskPos || !toTaskPos) return null;
-
-                                const fromX = fromTaskPos.left + fromTaskPos.width;
-                                const fromY = fromTaskPos.top + fromTaskPos.height / 2;
-                                const toX = toTaskPos.left;
-                                const toY = toTaskPos.top + toTaskPos.height / 2;
-                                
-                                if(toX <= fromX) return null; // Don't draw line if dependency is invalid
-
-                                return <path key={`${depId}-${task.id}`} d={`M ${fromX} ${fromY} H ${fromX + 20} V ${toY} H ${toX}`} stroke="#333" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead)" />;
-                            });
-                        })}
-                    </svg>
                 </div>
             </div>
+            <div className="overflow-x-auto border rounded-lg" ref={ganttContainerRef}>
+                <div className="relative" style={{ width: gridDates.length * columnWidth + 150 }}>
+                    {/* Header */}
+                    <div className="flex sticky top-0 z-20 bg-gray-50">
+                        <div className="w-[150px] flex-shrink-0 border-r border-b p-2 font-semibold text-sm text-black sticky left-0 bg-gray-50">Tarea</div>
+                        {gridDates.map((date, i) => (
+                            <div key={i} className="border-r border-b text-center text-xs p-1 flex-shrink-0" style={{ width: columnWidth }}>
+                                {getHeaderLabel(date)}
+                            </div>
+                        ))}
+                    </div>
+                    {/* Task Rows */}
+                    <div className="relative">
+                        {sortedTasks.map((task, index) => (
+                             <div key={task.id} data-task-id={task.id} className="gantt-task-row flex items-center border-b" style={{ height: 40 }}>
+                                <div className="w-[150px] flex-shrink-0 p-2 text-sm font-medium truncate text-black sticky left-0 bg-white border-r z-10 h-full flex items-center">{task.name}</div>
+                             </div>
+                        ))}
+                        {/* Task Bars */}
+                        {sortedTasks.map((task, index) => {
+                            const startPixel = dateToPixel(new Date(task.startDate));
+                            const endPixel = dateToPixel(new Date(task.endDate));
+                            let width = endPixel - startPixel + (timeScale === 'day' ? columnWidth : 0);
+                            if (width < 0) width = 0;
+
+                            const progress = task.completedVolume && task.totalVolume ? (task.completedVolume / task.totalVolume) * 100 : task.status === 'Completado' ? 100 : 0;
+                            const statusColor = task.status === 'Completado' ? 'bg-green-500' : task.status === 'En Progreso' ? 'bg-blue-500' : task.status === 'Retrasado' ? 'bg-red-500' : 'bg-gray-400';
+                            
+                            return (
+                                <div
+                                    key={task.id}
+                                    data-bar-id={task.id}
+                                    className="absolute h-8 top-0 rounded-md group flex items-center"
+                                    style={{ top: index * 40 + 6, left: 150 + startPixel, width }}
+                                    onMouseDown={(e) => handleMouseDown(e, task, 'move')}
+                                >
+                                    <div className={`absolute left-0 top-0 h-full rounded-md ${statusColor} opacity-70 w-full`}></div>
+                                    <div className={`absolute left-0 top-0 h-full rounded-md ${statusColor}`} style={{ width: `${progress}%` }}></div>
+                                    <span className="relative text-white text-xs px-2 truncate z-10 pointer-events-none">{task.name}</span>
+                                    
+                                    {/* Resize Handles */}
+                                    <div 
+                                        className="absolute left-0 top-0 h-full w-2 cursor-ew-resize z-20" 
+                                        onMouseDown={(e) => handleMouseDown(e, task, 'resize-start')}
+                                    />
+                                    <div 
+                                        className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-20"
+                                        onMouseDown={(e) => handleMouseDown(e, task, 'resize-end')}
+                                    />
+                                </div>
+                            );
+                        })}
+                        {/* Today Marker */}
+                        {todayOffset > 0 && (
+                            <div className="absolute top-0 bottom-0 border-r-2 border-red-500 z-20 pointer-events-none" style={{ left: 150 + todayOffset }}>
+                                <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs px-1 rounded-sm">Hoy</div>
+                            </div>
+                        )}
+                        {/* Dependency Lines */}
+                        <svg className="absolute top-0 left-[150px] w-full h-full pointer-events-none z-10">
+                            <defs>
+                                <marker id="arrowhead" markerWidth="5" markerHeight="3.5" refX="4.5" refY="1.75" orient="auto">
+                                    <polygon points="0 0, 5 1.75, 0 3.5" fill="#333" />
+                                </marker>
+                            </defs>
+                            {sortedTasks.map(task => {
+                                if (!task.dependsOn) return null;
+                                return task.dependsOn.map(depId => {
+                                    const fromTask = sortedTasks.find(t => t.id === depId);
+                                    if (!fromTask) return null;
+
+                                    const fromIndex = sortedTasks.findIndex(t => t.id === fromTask.id);
+                                    const toIndex = sortedTasks.findIndex(t => t.id === task.id);
+
+                                    if(fromIndex < 0 || toIndex < 0) return null;
+                                    
+                                    const fromX = dateToPixel(new Date(fromTask.endDate)) + (timeScale === 'day' ? columnWidth : 0);
+                                    const fromY = fromIndex * 40 + 20;
+                                    const toX = dateToPixel(new Date(task.startDate));
+                                    const toY = toIndex * 40 + 20;
+
+                                    if (toX <= fromX) return <path key={`${depId}-${task.id}`} d={`M ${fromX} ${fromY} L ${toX} ${toY}`} stroke="#ef4444" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />;
+                                    
+                                    return <path key={`${depId}-${task.id}`} d={`M ${fromX} ${fromY} H ${fromX + 10} V ${toY} H ${toX}`} stroke="#333" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead)" />;
+                                });
+                            })}
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            {tooltip && (
+                <div className="fixed p-2 bg-black text-white text-xs rounded-md pointer-events-none z-50" style={{ top: tooltip.y, left: tooltip.x, transform: 'translateY(-100%)' }}>
+                    {tooltip.text}
+                </div>
+            )}
         </Card>
     );
 };
@@ -308,7 +495,7 @@ const Planning: React.FC = () => {
             </div>
             
             <div className="mb-6">
-                <GanttChart tasks={tasks} />
+                <GanttChart tasks={tasks} setTasks={setTasks} />
             </div>
 
             <Card title="Lista de Tareas">
@@ -317,6 +504,8 @@ const Planning: React.FC = () => {
                         const attachedPhotos = task.photoIds ? photos.filter(p => task.photoIds!.includes(p.id)) : [];
                         const dependencies = task.dependsOn ? tasks.filter(t => task.dependsOn!.includes(t.id)) : [];
                         const progress = getTaskProgress(task);
+                        const valueProgress = task.totalValue ? task.totalValue * (progress / 100) : 0;
+
                         return (
                         <div key={task.id} className="p-4 border rounded-lg hover:shadow-lg transition-shadow">
                            <div className="flex justify-between items-start">
@@ -338,12 +527,30 @@ const Planning: React.FC = () => {
                                 </div>
                            </div>
                            <div className="mt-3">
-                               <div className="flex items-center">
-                                   <div className="flex-grow">
-                                       <ProgressBar value={progress} color={task.status === 'Retrasado' ? 'red' : task.status === 'Completado' ? 'green' : 'blue'} />
-                                   </div>
-                                   <span className="ml-4 w-12 text-right text-sm font-semibold text-black">{progress.toFixed(0)}%</span>
-                               </div>
+                                <div className="flex items-center">
+                                    <div className="flex-grow">
+                                        <ProgressBar value={progress} color={task.status === 'Retrasado' ? 'red' : task.status === 'Completado' ? 'green' : 'blue'} />
+                                    </div>
+                                    <span className="ml-4 w-12 text-right text-sm font-semibold text-black">{progress.toFixed(0)}%</span>
+                                </div>
+                                <div className="mt-2 flex justify-between items-baseline text-sm">
+                                    <div className="text-gray-600">
+                                        {(task.totalVolume && task.volumeUnit) ? (
+                                            <span>Avance Físico: <strong>{task.completedVolume ?? 0} / {task.totalVolume}</strong> {task.volumeUnit}</span>
+                                        ) : ( <span>&nbsp;</span> )}
+                                    </div>
+                                    <div className="text-right">
+                                        {task.totalValue && (
+                                            <p className="text-black">
+                                                <span className="font-medium">Avance Monetario:</span> 
+                                                <span className="font-bold text-green-600 ml-2">
+                                                    ${valueProgress.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                                <span className="text-gray-500"> / ${task.totalValue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
                            </div>
                            {attachedPhotos.length > 0 && (
                                 <div className="mt-4">
@@ -431,6 +638,17 @@ const Planning: React.FC = () => {
                     <div>
                         <label className="text-black block text-sm font-medium">Volumen de Avance</label>
                         <input type="number" placeholder="Ej. 25" value={currentTask.completedVolume || ''} onChange={e => setCurrentTask({...currentTask, completedVolume: parseFloat(e.target.value) || undefined})} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    </div>
+
+                    <div>
+                        <label className="text-black block text-sm font-medium">Valor Total del Trabajo ($)</label>
+                        <input 
+                            type="number" 
+                            placeholder="Ej. 10000" 
+                            value={currentTask.totalValue || ''} 
+                            onChange={e => setCurrentTask({...currentTask, totalValue: parseFloat(e.target.value) || undefined})} 
+                            className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" 
+                        />
                     </div>
                     
                     <div>
