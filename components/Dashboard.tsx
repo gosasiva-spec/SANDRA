@@ -30,6 +30,25 @@ const Dashboard: React.FC = () => {
   
   const lowStockItems = materials.filter(m => m.quantity <= m.criticalStockLevel);
 
+  const executedWorkValue = tasks.reduce((acc, task) => {
+    if (!task.totalValue) {
+        return acc;
+    }
+
+    if (task.status === 'Completado') {
+        return acc + task.totalValue;
+    }
+
+    if (task.status === 'En Progreso') {
+        const progress = (task.totalVolume && task.totalVolume > 0) 
+            ? ((task.completedVolume || 0) / task.totalVolume)
+            : 0;
+        return acc + (task.totalValue * progress);
+    }
+
+    return acc;
+  }, 0);
+
   const budgetChartData = budgetCategories.map(cat => {
     const spent = expenses.filter(exp => exp.categoryId === cat.id).reduce((sum, exp) => sum + exp.amount, 0);
     return { name: cat.name, Asignado: cat.allocated, Gastado: spent };
@@ -65,7 +84,7 @@ const Dashboard: React.FC = () => {
     <div>
       <h2 className="text-3xl font-semibold text-black mb-6">Panel del Proyecto</h2>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
         <Card>
           <h4 className="font-medium text-black">Presupuesto Total</h4>
           <p className="text-3xl font-bold text-black">${totalBudget.toLocaleString()}</p>
@@ -73,6 +92,10 @@ const Dashboard: React.FC = () => {
         <Card>
           <h4 className="font-medium text-black">Monto Gastado</h4>
           <p className="text-3xl font-bold text-black">${totalSpent.toLocaleString()}</p>
+        </Card>
+        <Card>
+          <h4 className="font-medium text-black">Valor del Trabajo Ejecutado</h4>
+          <p className="text-3xl font-bold text-black">${executedWorkValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </Card>
         <Card>
           <h4 className="font-medium text-black">Progreso del Proyecto</h4>
