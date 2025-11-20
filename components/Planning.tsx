@@ -6,8 +6,9 @@ import Card from './ui/Card';
 import Modal from './ui/Modal';
 import ProgressBar from './ui/ProgressBar';
 import { useProject } from '../contexts/ProjectContext';
-import { addDays, format, differenceInDays, startOfWeek, startOfMonth, addWeeks, addMonths, endOfWeek, endOfMonth } from 'date-fns';
+import { addDays, format, differenceInDays, startOfWeek, addWeeks, addMonths, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 
 type TimeScale = 'day' | 'week' | 'month';
@@ -75,16 +76,57 @@ const GanttChart: React.FC<{
         }
         return units * columnWidth;
     }, [overallStartDate, timeScale, columnWidth]);
-    
-    const pixelToDate = useCallback((pixel: number) => {
-        let daysToAdd = 0;
-        switch (timeScale) {
-            case 'day': daysToAdd = pixel / columnWidth; break;
-            case 'week': daysToAdd = (pixel / columnWidth) * 7; break;
-            case 'month': daysToAdd = (pixel / columnWidth) * 30.44; break;
+
+    const getTaskProgress = useCallback((task: Task) => {
+        if (task.totalVolume && task.totalVolume > 0) {
+            return Math.min(100, ((task.completedVolume || 0) / task.totalVolume) * 100);
         }
-        return addDays(overallStartDate, daysToAdd);
-    }, [overallStartDate, timeScale, columnWidth]);
+        if (task.status === 'Completado') return 100;
+        return 0;
+    }, []);
+
+    const projectStartDate = overallStartDate.getTime();
+
+    const chartData = useMemo(() => sortedTasks.map(task => {
+        const start = new Date(task.startDate).getTime();
+        const end = new Date(task.endDate).getTime();
+        let duration = end - start;
+        if (duration < 0) duration = 0;
+
+        const progress = getTaskProgress(task);
+        const completed = duration * (progress / 100);
+        const remaining = duration - completed;
+
+        return {
+            name: task.name,
+            offset: start - projectStartDate,
+            completed: completed,
+            remaining: remaining,
+            startDate: format(new Date(start), 'P', { locale: es }),
+            endDate: format(new Date(end), 'P', { locale: es }),
+            status: task.status
+        };
+    }), [sortedTasks, projectStartDate, getTaskProgress]);
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <div className="bg-white p-2 border shadow-lg rounded text-sm text-black">
+                    <p className="font-bold">{label}</p>
+                    <p>Inicio: {data.startDate}</p>
+                    <p>Fin: {data.endDate}</p>
+                    <p>Estado: {data.status}</p>
+                </div>
+            );
+        }
+        return null;
+    };
+    
+    const tickFormatter = useCallback((tick: number) => {
+        const date = new Date(projectStartDate + tick);
+        return format(date, 'd MMM', { locale: es });
+    }, [projectStartDate]);
 
     // Update dependency line positions
     useEffect(() => {
@@ -215,7 +257,7 @@ const GanttChart: React.FC<{
         setTasks(currentTasks => currentTasks.map(t => t.id === updatedTask.id ? updatedTask : t));
         setDragInfo(null);
         setTooltip(null);
-    }, [dragInfo, setTasks, tasks, pixelToDate, dateToPixel, columnWidth, timeScale]);
+    }, [dragInfo, setTasks, tasks, dateToPixel, columnWidth, timeScale]);
 
     useEffect(() => {
         if (dragInfo) {
@@ -307,7 +349,7 @@ const GanttChart: React.FC<{
                             );
                         })}
                         {/* Today Marker */}
-                        {todayOffset > 0 && (
+                        {todayOffset > 0 && today > overallStartDate && today < overallEndDate && (
                             <div className="absolute top-0 bottom-0 border-r-2 border-red-500 z-20 pointer-events-none" style={{ left: 150 + todayOffset }}>
                                 <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs px-1 rounded-sm">Hoy</div>
                             </div>
@@ -341,6 +383,29 @@ const GanttChart: React.FC<{
                                 });
                             })}
                         </svg>
+                        {/* Recharts Chart for Axes and Grid */}
+                        <div className="absolute top-0 left-[150px] w-full h-full pointer-events-none">
+                             <ResponsiveContainer>
+                                <BarChart
+                                    layout="vertical"
+                                    data={chartData}
+                                    margin={{ top: 40, right: 0, left: 0, bottom: 20 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis 
+                                        type="number" 
+                                        dataKey="offset" 
+                                        domain={[0, overallEndDate.getTime() - projectStartDate]} 
+                                        tickFormatter={tickFormatter} 
+                                        tick={{ fontSize: 10, fill: '#000' }} 
+                                        dy={5} 
+                                        xAxisId="gantt-axis"
+                                        orientation="top"
+                                    />
+                                    {/* Y-axis is handled by the manual task list */}
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -426,11 +426,11 @@ const Reports: React.FC = () => {
                             <BarChart
                                 layout="vertical"
                                 data={chartData}
-                                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                margin={{ top: 5, right: 30, left: 20, bottom: 20 }}
                                 barCategoryGap="35%"
                             >
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" domain={[0, 'auto']} tickFormatter={tickFormatter} />
+                                <XAxis type="number" domain={[0, 'auto']} tickFormatter={tickFormatter} tick={{ fontSize: 10, fill: 'black' }} dy={5} />
                                 <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 12, fill: '#000' }} />
                                 <Tooltip content={<CustomTooltip />} cursor={{fill: 'rgba(240, 240, 240, 0.5)'}} />
                                 <Legend wrapperStyle={{fontSize: "12px", paddingTop: "10px"}}/>
