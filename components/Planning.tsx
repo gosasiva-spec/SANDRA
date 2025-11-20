@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { initialTasks, initialWorkers, initialPhotos } from '../constants';
@@ -20,6 +21,7 @@ const GanttChart: React.FC<{
     const ganttContainerRef = useRef<HTMLDivElement>(null);
     const [timeScale, setTimeScale] = useState<TimeScale>('day');
     const [taskPositions, setTaskPositions] = useState<Record<string, { top: number, height: number }>>({});
+    const [isDownloading, setIsDownloading] = useState(false);
     
     // State for drag and drop functionality
     const [dragInfo, setDragInfo] = useState<{
@@ -141,6 +143,32 @@ const GanttChart: React.FC<{
         });
         setTaskPositions(newPositions);
     }, [sortedTasks]);
+
+    const handleDownload = async () => {
+        const element = document.getElementById('gantt-chart-view');
+        if (!element) return;
+
+        setIsDownloading(true);
+        try {
+            const canvas = await (window as any).html2canvas(element, {
+                backgroundColor: '#ffffff',
+                scale: 2 
+            });
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = 'cronograma_proyecto.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('Error al descargar la gráfica:', error);
+            alert('Ocurrió un error al intentar descargar la gráfica.');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
 
     const handleMouseDown = (e: React.MouseEvent, task: Task, action: 'move' | 'resize-end' | 'resize-start') => {
         e.preventDefault();
@@ -288,15 +316,29 @@ const GanttChart: React.FC<{
         <Card>
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-semibold text-black">Diagrama de Gantt</h3>
-                <div className="flex gap-1 p-1 bg-gray-200 rounded-md">
-                    {(['day', 'week', 'month'] as TimeScale[]).map(scale => (
-                        <button key={scale} onClick={() => setTimeScale(scale)} className={`px-3 py-1 text-sm rounded-md transition-colors ${timeScale === scale ? 'bg-white text-primary-600 shadow' : 'bg-transparent text-black'}`}>
-                            {scale === 'day' ? 'Día' : scale === 'week' ? 'Semana' : 'Mes'}
-                        </button>
-                    ))}
+                <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                        onClick={handleDownload}
+                        disabled={isDownloading}
+                        className="px-3 py-1 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 transition-colors flex items-center gap-1"
+                    >
+                        {isDownloading ? '...' : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        )}
+                        <span className="hidden sm:inline">{isDownloading ? 'Descargando' : 'Descargar'}</span>
+                    </button>
+                    <div className="flex gap-1 p-1 bg-gray-200 rounded-md">
+                        {(['day', 'week', 'month'] as TimeScale[]).map(scale => (
+                            <button key={scale} onClick={() => setTimeScale(scale)} className={`px-3 py-1 text-sm rounded-md transition-colors ${timeScale === scale ? 'bg-white text-primary-600 shadow' : 'bg-transparent text-black'}`}>
+                                {scale === 'day' ? 'Día' : scale === 'week' ? 'Semana' : 'Mes'}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
-            <div className="overflow-x-auto border rounded-lg" ref={ganttContainerRef}>
+            <div id="gantt-chart-view" className="overflow-x-auto border rounded-lg bg-white" ref={ganttContainerRef}>
                 <div className="relative" style={{ width: gridDates.length * columnWidth + 150 }}>
                     {/* Header */}
                     <div className="flex sticky top-0 z-20 bg-gray-50">
