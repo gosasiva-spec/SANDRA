@@ -1,6 +1,31 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// Helper para obtener variables de entorno de manera segura (Soporte para Vite y standard process.env)
+const getEnv = (key: string, viteKey: string) => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[viteKey]) {
+    // @ts-ignore
+    return import.meta.env[viteKey];
+  }
+  return '';
+};
+
+const supabaseUrl = getEnv('SUPABASE_URL', 'VITE_SUPABASE_URL');
+const supabaseKey = getEnv('SUPABASE_KEY', 'VITE_SUPABASE_KEY');
+
+if (!supabaseUrl || !supabaseKey) {
+    console.warn('Supabase URL o Key no encontradas. Asegúrate de configurar las variables de entorno (SUPABASE_URL, SUPABASE_KEY o VITE_SUPABASE_URL, VITE_SUPABASE_KEY).');
+}
+
+export const supabase = createClient(
+    supabaseUrl || 'https://placeholder-project.supabase.co', 
+    supabaseKey || 'placeholder-key'
+);
+
 // Instrucciones para el usuario:
 // 1. Crea un proyecto en Supabase.
 // 2. Ve al editor SQL y ejecuta el siguiente script para crear las tablas necesarias:
@@ -126,10 +151,3 @@ create table interactions (
   follow_up_date text
 );
 */
-
-// NOTA: En un entorno real, usa variables de entorno.
-// Aquí debes reemplazar con tus propias credenciales de Supabase.
-const supabaseUrl = process.env.SUPABASE_URL || 'https://tu-proyecto.supabase.co';
-const supabaseKey = process.env.SUPABASE_KEY || 'tu-anon-key';
-
-export const supabase = createClient(supabaseUrl, supabaseKey);

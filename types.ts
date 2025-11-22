@@ -98,7 +98,7 @@ export interface User {
   name: string;
   email: string;
   password?: string; // Should be hashed in a real app
-  role?: 'admin' | 'user' | 'viewer'; // Added 'viewer'
+  role?: 'admin' | 'user' | 'viewer';
 }
 
 export interface ContentEntry {

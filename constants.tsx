@@ -53,16 +53,15 @@ export const initialInteractions: Interaction[] = [
 export const initialCmsEntries: ContentEntry[] = [
     {
         id: 'cms-1',
-        title: 'Bienvenido a ConstructPro',
-        content: 'Esta es la primera entrada de tu nuevo sistema de gestión de contenidos. Aquí puedes compartir actualizaciones del proyecto, noticias y anuncios importantes con todo el equipo.',
-        author: 'Administrador',
+        title: 'Inicio del Proyecto',
+        content: 'Hoy damos inicio oficial al proyecto. Todo el equipo está emocionado por comenzar.',
+        author: 'Gerente de Proyecto',
         status: 'Publicado',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        tags: ['Anuncio', 'General']
+        tags: ['inicio', 'general']
     }
 ];
-
 
 // FIX: Replaced JSX.Element with React.ReactElement to resolve "Cannot find namespace 'JSX'" error.
 export const ICONS: { [key: string]: React.ReactElement } = {

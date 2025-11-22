@@ -124,22 +124,23 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
         try {
             // Fetch Projects
             const { data: projectsData, error: projError } = await supabase.from('projects').select('*');
-            if (projError) console.error('Error fetching projects:', projError);
-            
-            if (projectsData) {
+            if (projError) {
+                console.error('Error fetching projects:', projError.message);
+            } else if (projectsData) {
                 setAllProjects(mapKeysToCamel(projectsData));
             }
 
             // Fetch Users
             const { data: usersData, error: usersError } = await supabase.from('users').select('*');
-            if (usersError) console.error('Error fetching users:', usersError);
-            if (usersData) {
+            if (usersError) {
+                console.error('Error fetching users:', usersError.message);
+            } else if (usersData) {
                 setAllUsers(mapKeysToCamel(usersData));
             }
             
             setIsReady(true);
         } catch (err) {
-            console.error(err);
+            console.error('Unexpected initialization error:', err);
             setIsReady(true);
         }
     };
@@ -156,7 +157,6 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
     }
     
     if (projectsForCurrentUser.length > 0 && !activeProjectId) {
-        // Try to restore from local storage for UX, but validate against list
         const storedId = localStorage.getItem(`constructpro_lastActive_${currentUser.id}`);
         if (storedId && projectsForCurrentUser.some(p => p.id === storedId)) {
             setActiveProjectId(storedId);
@@ -185,7 +185,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
                     .eq('project_id', activeProjectId);
                 
                 if (error) {
-                    console.error(`Error fetching ${table}:`, error);
+                    console.error(`Error fetching ${table}:`, error.message);
                     return [key, []];
                 }
                 return [key, mapKeysToCamel(data)];
@@ -229,7 +229,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
         setAllProjects(prev => [...prev, createdProject]);
         switchProject(createdProject.id);
     } else {
-        console.error("Error creating project:", error);
+        console.error("Error creating project:", error.message);
+        throw error;
     }
   };
 
@@ -240,7 +241,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
     if (!error) {
         setAllProjects(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
     } else {
-        console.error("Error updating project:", error);
+        console.error("Error updating project:", error.message);
+        throw error;
     }
   };
 
@@ -253,7 +255,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
             setActiveProjectId(null);
         }
     } else {
-         console.error("Error deleting project:", error);
+         console.error("Error deleting project:", error.message);
+         throw error;
     }
   };
 
@@ -276,14 +279,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
               [resource]: [...prev[resource], item]
           }));
       } else {
-          console.error(`Error adding to ${resource}:`, error);
-          alert(`Error al guardar: ${error.message}`);
+          console.error(`Error adding to ${resource}:`, error.message);
+          throw error;
       }
   };
 
   const updateItem = async (resource: keyof ProjectData, id: string, item: any) => {
       const dbItem = mapKeysToSnake(item);
-      // Avoid updating project_id just in case, though it shouldn't change
       delete dbItem.project_id; 
       
       const { error } = await supabase.from(TABLE_MAP[resource]).update(dbItem).eq('id', id);
@@ -294,8 +296,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
               [resource]: prev[resource].map((i: any) => i.id === id ? { ...i, ...item } : i)
           }));
       } else {
-          console.error(`Error updating ${resource}:`, error);
-          alert(`Error al actualizar: ${error.message}`);
+          console.error(`Error updating ${resource}:`, error.message);
+          throw error;
       }
   };
 
@@ -308,8 +310,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
               [resource]: prev[resource].filter((i: any) => i.id !== id)
           }));
       } else {
-          console.error(`Error deleting from ${resource}:`, error);
-          alert(`Error al eliminar: ${error.message}`);
+          console.error(`Error deleting from ${resource}:`, error.message);
+          throw error;
       }
   };
 
@@ -320,7 +322,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
       if (!error) {
           setAllUsers(prev => [...prev, user]);
       } else {
-          console.error("Error adding user:", error);
+          console.error("Error adding user:", error.message);
           throw error;
       }
   };
@@ -331,7 +333,8 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
       if (!error) {
           setAllUsers(prev => prev.map(u => u.id === id ? { ...u, ...user } : u));
       } else {
-          console.error("Error updating user:", error);
+          console.error("Error updating user:", error.message);
+          throw error;
       }
   };
 
@@ -340,13 +343,13 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
       if (!error) {
           setAllUsers(prev => prev.filter(u => u.id !== id));
       } else {
-           console.error("Error deleting user:", error);
+           console.error("Error deleting user:", error.message);
+           throw error;
       }
   };
 
   const activeProject = allProjects.find(p => p.id === activeProjectId) || null;
   
-  // Filter projects based on role logic for the "projects" prop exposed to consumers
   let visibleProjects = allProjects;
   if (currentUser.role !== 'admin' && currentUser.role !== 'viewer') {
       visibleProjects = allProjects.filter(p => p.ownerId === currentUser.id);

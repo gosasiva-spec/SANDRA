@@ -43,11 +43,12 @@ const UserManagement: React.FC = () => {
         }
 
         setIsSaving(true);
+        setValidationError('');
+        
         try {
             if (isEditing) {
                 await updateUser(currentUser.id!, currentUser);
             } else {
-                // Check duplicate logic handled by DB constraint usually, but locally:
                 if (allUsers.some(u => u.email === currentUser.email)) {
                     setValidationError('Ya existe un usuario con este correo electrónico.');
                     setIsSaving(false);
@@ -57,8 +58,8 @@ const UserManagement: React.FC = () => {
                 await addUser(newUser);
             }
             setIsModalOpen(false);
-        } catch (error) {
-            setValidationError('Error al guardar el usuario.');
+        } catch (error: any) {
+            setValidationError(`Error al guardar el usuario: ${error.message || 'Error desconocido'}`);
         } finally {
             setIsSaving(false);
         }
@@ -74,7 +75,11 @@ const UserManagement: React.FC = () => {
 
     const confirmDeleteUser = async () => {
         if (deleteConfirmation.id) {
-            await deleteUser(deleteConfirmation.id);
+            try {
+                await deleteUser(deleteConfirmation.id);
+            } catch (error: any) {
+                alert(`Error al eliminar usuario: ${error.message}`);
+            }
         }
         setDeleteConfirmation({ isOpen: false, id: null, name: '' });
     };
