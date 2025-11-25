@@ -10,7 +10,7 @@ export interface Project {
   pin?: string;
 }
 
-// Define a mapping for JS keys to DB keys
+// Helpers for Data Mapping
 const toSnakeCase = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 const toCamelCase = (str: string) => str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
 
@@ -36,6 +36,14 @@ const mapKeysToCamel = (obj: any): any => {
         }, {} as any);
     }
     return obj;
+};
+
+// Helper for ID generation in Offline Mode
+const generateId = (prefix: string) => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return `${prefix}-${crypto.randomUUID()}`;
+    }
+    return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
 };
 
 interface ProjectData {
@@ -108,7 +116,13 @@ const INITIAL_DATA: ProjectData = {
     interactions: []
 };
 
-// Helper to format error messages safely
+// Storage Keys Constants
+const STORAGE_KEYS = {
+    PROJECTS: 'constructpro_allProjects',
+    USERS: 'constructpro_users',
+    DATA_PREFIX: 'constructpro_data_'
+};
+
 const formatError = (error: any): string => {
     if (!error) return 'Unknown error';
     if (error instanceof Error) return error.message;
@@ -128,40 +142,61 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   const [loadingData, setLoadingData] = useState(false);
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
-  // 1. Load Projects and Users on mount
+  // 1. Initialize Application (Load Projects & Users)
   useEffect(() => {
     const init = async () => {
+        // --- OFFLINE / LOCAL STORAGE MODE ---
         if (!isConfigured) {
-            console.warn("Supabase is not configured. Skipping data fetch.");
+            console.log("Modo Offline: Cargando datos desde LocalStorage");
+            try {
+                // Load Projects
+                const localProjects = localStorage.getItem(STORAGE_KEYS.PROJECTS);
+                if (localProjects) {
+                    setAllProjects(JSON.parse(localProjects));
+                }
+
+                // Load Users
+                const localUsers = localStorage.getItem(STORAGE_KEYS.USERS);
+                if (localUsers) {
+                    setAllUsers(JSON.parse(localUsers));
+                } else {
+                    // Initialize default admin if no users exist locally
+                    if (currentUser.email === 'admin@constructpro.com') {
+                        setAllUsers([currentUser]);
+                        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([currentUser]));
+                    }
+                }
+            } catch (e) {
+                console.error("Error loading local data:", e);
+            }
             setIsReady(true);
             return;
         }
 
+        // --- SUPABASE MODE ---
         try {
-            // Fetch Projects
             const { data: projectsData, error: projError } = await supabase.from('projects').select('*');
             if (projError) throw projError;
             if (projectsData) {
                 setAllProjects(mapKeysToCamel(projectsData));
             }
 
-            // Fetch Users
             const { data: usersData, error: usersError } = await supabase.from('users').select('*');
             if (usersError) throw usersError;
             if (usersData) {
                 setAllUsers(mapKeysToCamel(usersData));
             }
-            
         } catch (err: any) {
-            console.error('Initialization error:', formatError(err));
+            console.error('Initialization error (Supabase):', formatError(err));
+            // Fallback to empty state on error to avoid crashing
         } finally {
             setIsReady(true);
         }
     };
     init();
-  }, []);
+  }, [currentUser]); // Added currentUser to dependencies to ensure admin check works
 
-  // 2. Handle Active Project Selection Logic
+  // 2. Determine Active Project
   useEffect(() => {
     if (!isReady) return;
     
@@ -182,15 +217,36 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
     }
   }, [isReady, allProjects, currentUser, activeProjectId]);
 
-  // 3. Fetch Project Data when activeProjectId changes
+  // 3. Fetch Data for Active Project
   useEffect(() => {
-    if (!activeProjectId || !isConfigured) {
+    if (!activeProjectId) {
         setProjectData(INITIAL_DATA);
         return;
     }
 
     const fetchProjectData = async () => {
         setLoadingData(true);
+        
+        // --- OFFLINE MODE ---
+        if (!isConfigured) {
+            const newData: any = { ...INITIAL_DATA };
+            Object.keys(TABLE_MAP).forEach((key) => {
+                const storageKey = `${STORAGE_KEYS.DATA_PREFIX}${activeProjectId}_${key}`;
+                const storedItem = localStorage.getItem(storageKey);
+                if (storedItem) {
+                    try {
+                        newData[key] = JSON.parse(storedItem);
+                    } catch (e) {
+                        console.error(`Error parsing local data for ${key}`, e);
+                    }
+                }
+            });
+            setProjectData(newData);
+            setLoadingData(false);
+            return;
+        }
+
+        // --- SUPABASE MODE ---
         try {
             const promises = Object.entries(TABLE_MAP).map(async ([key, table]) => {
                 const { data, error } = await supabase
@@ -223,25 +279,43 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   }, [activeProjectId]);
 
 
+  // --- ACTIONS ---
+
   const switchProject = (id: string) => {
     setActiveProjectId(id);
     localStorage.setItem(`constructpro_lastActive_${currentUser.id}`, id);
   };
 
   const createProject = async (name: string, pin?: string) => {
-    if (!isConfigured) {
-        throw new Error("Database not configured. Cannot create project.");
-    }
-
     const newProject = {
-        id: `proj-${Date.now()}`,
+        id: isConfigured ? `proj-${Date.now()}` : generateId('proj'), // Placeholder ID for Supabase if not returned, real ID for Local
         name,
         pin,
-        owner_id: currentUser.id
+        ownerId: currentUser.id // camelCase for local, converted later for DB
     };
 
+    // --- OFFLINE MODE ---
+    if (!isConfigured) {
+        try {
+            const updatedProjects = [...allProjects, newProject];
+            setAllProjects(updatedProjects);
+            localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updatedProjects));
+            switchProject(newProject.id);
+            return;
+        } catch (e) {
+            console.error("Error creating project locally:", e);
+            throw new Error("No se pudo guardar el proyecto localmente.");
+        }
+    }
+
+    // --- SUPABASE MODE ---
     try {
-        const { data, error } = await supabase.from('projects').insert(newProject).select().single();
+        const dbProject = {
+            name,
+            pin,
+            owner_id: currentUser.id
+        };
+        const { data, error } = await supabase.from('projects').insert(dbProject).select().single();
         
         if (error) throw error;
         
@@ -257,13 +331,19 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   };
 
   const updateProject = async (id: string, data: Partial<Omit<Project, 'id' | 'ownerId'>>) => {
-    if (!isConfigured) return;
+    // --- OFFLINE MODE ---
+    if (!isConfigured) {
+        const updatedProjects = allProjects.map(p => p.id === id ? { ...p, ...data } : p);
+        setAllProjects(updatedProjects);
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updatedProjects));
+        return;
+    }
+
+    // --- SUPABASE MODE ---
     try {
         const dbData = mapKeysToSnake(data);
         const { error } = await supabase.from('projects').update(dbData).eq('id', id);
-
         if (error) throw error;
-        
         setAllProjects(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
     } catch (error: any) {
         console.error("Error updating project:", formatError(error));
@@ -272,10 +352,26 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   };
 
   const deleteProject = async (id: string) => {
-    if (!isConfigured) return;
+    // --- OFFLINE MODE ---
+    if (!isConfigured) {
+        const updatedProjects = allProjects.filter(p => p.id !== id);
+        setAllProjects(updatedProjects);
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(updatedProjects));
+        
+        // Cleanup project data
+        Object.keys(TABLE_MAP).forEach(key => {
+             localStorage.removeItem(`${STORAGE_KEYS.DATA_PREFIX}${id}_${key}`);
+        });
+
+        if (activeProjectId === id) {
+            setActiveProjectId(null);
+        }
+        return;
+    }
+
+    // --- SUPABASE MODE ---
     try {
         const { error } = await supabase.from('projects').delete().eq('id', id);
-        
         if (error) throw error;
         
         setAllProjects(prev => prev.filter(p => p.id !== id));
@@ -295,9 +391,25 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   // --- Generic CRUD for Project Data ---
 
   const addItem = async (resource: keyof ProjectData, item: any) => {
-      if (!activeProjectId || !isConfigured) return;
+      if (!activeProjectId) return;
+
+      const itemWithId = { ...item, id: item.id || generateId(resource.slice(0, 3)) };
+
+      // --- OFFLINE MODE ---
+      if (!isConfigured) {
+          setProjectData(prev => {
+              const newList = [...prev[resource], itemWithId];
+              const newState = { ...prev, [resource]: newList };
+              // Persist
+              localStorage.setItem(`${STORAGE_KEYS.DATA_PREFIX}${activeProjectId}_${resource}`, JSON.stringify(newList));
+              return newState;
+          });
+          return;
+      }
+
+      // --- SUPABASE MODE ---
       try {
-          const itemWithProject = { ...item, project_id: activeProjectId };
+          const itemWithProject = { ...itemWithId, project_id: activeProjectId };
           const dbItem = mapKeysToSnake(itemWithProject);
           
           const { error } = await supabase.from(TABLE_MAP[resource]).insert(dbItem);
@@ -306,7 +418,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
           
           setProjectData(prev => ({
               ...prev,
-              [resource]: [...prev[resource], item]
+              [resource]: [...prev[resource], itemWithId]
           }));
       } catch (error: any) {
           console.error(`Error adding to ${resource}:`, formatError(error));
@@ -315,10 +427,24 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   };
 
   const updateItem = async (resource: keyof ProjectData, id: string, item: any) => {
-      if (!isConfigured) return;
+      // --- OFFLINE MODE ---
+      if (!isConfigured) {
+           if (!activeProjectId) return;
+           setProjectData(prev => {
+              const newList = prev[resource].map((i: any) => i.id === id ? { ...i, ...item } : i);
+              const newState = { ...prev, [resource]: newList };
+              // Persist
+              localStorage.setItem(`${STORAGE_KEYS.DATA_PREFIX}${activeProjectId}_${resource}`, JSON.stringify(newList));
+              return newState;
+          });
+          return;
+      }
+
+      // --- SUPABASE MODE ---
       try {
           const dbItem = mapKeysToSnake(item);
           delete dbItem.project_id; 
+          delete dbItem.id; // Usually don't update ID
           
           const { error } = await supabase.from(TABLE_MAP[resource]).update(dbItem).eq('id', id);
           
@@ -335,7 +461,20 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   };
 
   const deleteItem = async (resource: keyof ProjectData, id: string) => {
-      if (!isConfigured) return;
+      // --- OFFLINE MODE ---
+      if (!isConfigured) {
+          if (!activeProjectId) return;
+          setProjectData(prev => {
+              const newList = prev[resource].filter((i: any) => i.id !== id);
+              const newState = { ...prev, [resource]: newList };
+              // Persist
+              localStorage.setItem(`${STORAGE_KEYS.DATA_PREFIX}${activeProjectId}_${resource}`, JSON.stringify(newList));
+              return newState;
+          });
+          return;
+      }
+
+      // --- SUPABASE MODE ---
       try {
           const { error } = await supabase.from(TABLE_MAP[resource]).delete().eq('id', id);
           
@@ -353,14 +492,22 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
 
   // --- User Management ---
   const addUser = async (user: User) => {
+      const newUser = { ...user, id: user.id || generateId('user') };
+
+      // --- OFFLINE MODE ---
       if (!isConfigured) {
-          throw new Error("Database not configured.");
+          const updatedUsers = [...allUsers, newUser];
+          setAllUsers(updatedUsers);
+          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updatedUsers));
+          return;
       }
+
+      // --- SUPABASE MODE ---
       try {
-          const dbUser = mapKeysToSnake(user);
+          const dbUser = mapKeysToSnake(newUser);
           const { error } = await supabase.from('users').insert(dbUser);
           if (error) throw error;
-          setAllUsers(prev => [...prev, user]);
+          setAllUsers(prev => [...prev, newUser]);
       } catch (error: any) {
           console.error("Error adding user:", formatError(error));
           throw error;
@@ -368,7 +515,15 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   };
 
   const updateUser = async (id: string, user: Partial<User>) => {
-      if (!isConfigured) return;
+      // --- OFFLINE MODE ---
+      if (!isConfigured) {
+          const updatedUsers = allUsers.map(u => u.id === id ? { ...u, ...user } : u);
+          setAllUsers(updatedUsers);
+          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updatedUsers));
+          return;
+      }
+
+      // --- SUPABASE MODE ---
       try {
           const dbUser = mapKeysToSnake(user);
           const { error } = await supabase.from('users').update(dbUser).eq('id', id);
@@ -381,7 +536,15 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   };
 
   const deleteUser = async (id: string) => {
-      if (!isConfigured) return;
+      // --- OFFLINE MODE ---
+      if (!isConfigured) {
+          const updatedUsers = allUsers.filter(u => u.id !== id);
+          setAllUsers(updatedUsers);
+          localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updatedUsers));
+          return;
+      }
+
+      // --- SUPABASE MODE ---
       try {
           const { error } = await supabase.from('users').delete().eq('id', id);
           if (error) throw error;
