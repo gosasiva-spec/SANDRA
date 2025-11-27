@@ -7,7 +7,6 @@ import ConfirmModal from './ui/ConfirmModal';
 import ProgressBar from './ui/ProgressBar';
 import { useProject } from '../contexts/ProjectContext';
 import { addDays, format, differenceInDays, startOfWeek, addWeeks, addMonths, endOfWeek } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 
@@ -103,15 +102,15 @@ const GanttChart: React.FC<{
             offset: start - projectStartDate,
             completed: completed,
             remaining: remaining,
-            startDate: format(new Date(start), 'P', { locale: es }),
-            endDate: format(new Date(end), 'P', { locale: es }),
+            startDate: new Date(start).toLocaleDateString('es-ES'),
+            endDate: new Date(end).toLocaleDateString('es-ES'),
             status: task.status
         };
     }), [sortedTasks, projectStartDate, getTaskProgress]);
     
     const tickFormatter = useCallback((tick: number) => {
         const date = new Date(projectStartDate + tick);
-        return format(date, 'd MMM', { locale: es });
+        return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
     }, [projectStartDate]);
 
     useEffect(() => {
@@ -188,11 +187,12 @@ const GanttChart: React.FC<{
             if (newStartDate > newEndDate) newStartDate = newEndDate;
         }
         
-        const formatStr = "dd/MM/yyyy";
+        const formatStr = { year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+        // @ts-ignore
         setTooltip({
             x: e.clientX + 15,
             y: e.clientY,
-            text: `${format(newStartDate, formatStr)} - ${format(newEndDate, formatStr)}`
+            text: `${newStartDate.toLocaleDateString('es-ES')} - ${newEndDate.toLocaleDateString('es-ES')}`
         });
 
         const taskBar = ganttContainerRef.current?.querySelector(`[data-bar-id="${dragInfo.task.id}"]`) as HTMLElement;
@@ -283,9 +283,9 @@ const GanttChart: React.FC<{
     
     const getHeaderLabel = (date: Date) => {
         switch (timeScale) {
-            case 'day': return <><span className="text-black">{format(date, 'd')}</span><span className="block text-gray-500">{format(date, 'MMM', { locale: es })}</span></>;
-            case 'week': return <span className="text-black text-[10px]">Semana {format(date, 'w', { locale: es })}</span>;
-            case 'month': return <span className="text-black">{format(date, 'MMMM yyyy', { locale: es })}</span>;
+            case 'day': return <><span className="text-black">{date.getDate()}</span><span className="block text-gray-500">{date.toLocaleDateString('es-ES', { month: 'short' })}</span></>;
+            case 'week': return <span className="text-black text-[10px]">Semana {format(date, 'w')}</span>;
+            case 'month': return <span className="text-black">{date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>;
         }
     };
     
