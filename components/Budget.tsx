@@ -44,7 +44,7 @@ const Budget: React.FC = () => {
         if (!canEdit) return;
         setValidationError('');
         if (expense) {
-            setCurrentExpense(expense);
+            setCurrentExpense({ ...expense });
             setIsEditingExpense(true);
         } else {
             setCurrentExpense({ date: new Date().toISOString().split('T')[0] });
@@ -62,17 +62,29 @@ const Budget: React.FC = () => {
 
     const handleSaveExpense = async () => {
         if (!canEdit) return;
-        if (!currentExpense.description || !currentExpense.amount || !currentExpense.categoryId || !currentExpense.date) {
+        if (!currentExpense.description || currentExpense.amount === undefined || !currentExpense.categoryId || !currentExpense.date) {
             setValidationError('Por favor, complete todos los campos (Descripción, Monto, Categoría, Fecha).');
             return;
         }
 
-        if (isEditingExpense && currentExpense.id) {
-            await updateItem('expenses', currentExpense.id, currentExpense);
-        } else {
-            await addItem('expenses', { ...currentExpense, id: `exp-${Date.now()}` });
+        try {
+            const expenseData = {
+                description: currentExpense.description,
+                amount: Number(currentExpense.amount),
+                categoryId: currentExpense.categoryId,
+                date: currentExpense.date
+            };
+
+            if (isEditingExpense && currentExpense.id) {
+                await updateItem('expenses', currentExpense.id, expenseData);
+            } else {
+                await addItem('expenses', { ...expenseData, id: `exp-${Date.now()}` });
+            }
+            handleCloseExpenseModal();
+        } catch (error) {
+            console.error("Error saving expense:", error);
+            setValidationError("Error al guardar el gasto. Intente nuevamente.");
         }
-        handleCloseExpenseModal();
     };
     
     const handleDeleteExpenseClick = (expenseId: string) => {
@@ -96,7 +108,7 @@ const Budget: React.FC = () => {
         if (!canEdit) return;
         setValidationError('');
         if (category) {
-            setCurrentCategory(category);
+            setCurrentCategory({ ...category });
             setIsEditingCategory(true);
         } else {
             setCurrentCategory({ name: '', allocated: 0 });
@@ -118,12 +130,23 @@ const Budget: React.FC = () => {
             return;
         }
         
-        if (isEditingCategory && currentCategory.id) {
-            await updateItem('budgetCategories', currentCategory.id, currentCategory);
-        } else {
-            await addItem('budgetCategories', { id: `cat-${Date.now()}`, name: currentCategory.name, allocated: currentCategory.allocated });
+        try {
+            // Explicitly construct payload to ensure clean data
+            const categoryData = {
+                name: currentCategory.name,
+                allocated: Number(currentCategory.allocated)
+            };
+
+            if (isEditingCategory && currentCategory.id) {
+                await updateItem('budgetCategories', currentCategory.id, categoryData);
+            } else {
+                await addItem('budgetCategories', { ...categoryData, id: `cat-${Date.now()}` });
+            }
+            handleCloseCategoryModal();
+        } catch (error) {
+            console.error("Error saving category:", error);
+            setValidationError("Error al guardar la categoría. Intente nuevamente.");
         }
-        handleCloseCategoryModal();
     };
 
 
@@ -163,35 +186,42 @@ const Budget: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
                     <Card title="Registro de Gastos">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="border-b bg-gray-50">
-                                    <th className="p-3">Fecha</th>
-                                    <th className="p-3">Descripción</th>
-                                    <th className="p-3">Categoría</th>
-                                    <th className="p-3 text-right">Monto</th>
-                                    <th className="p-3 text-center">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(exp => (
-                                    <tr key={exp.id} className="border-b hover:bg-gray-50">
-                                        <td className="p-3 text-sm text-black">{new Date(exp.date).toLocaleDateString()}</td>
-                                        <td className="p-3 font-medium">{exp.description}</td>
-                                        <td className="p-3">{budgetCategories.find(c => c.id === exp.categoryId)?.name}</td>
-                                        <td className="p-3 text-right font-semibold">${exp.amount.toFixed(2)}</td>
-                                        <td className="p-3 text-center whitespace-nowrap">
-                                            {canEdit ? (
-                                                <>
-                                                    <button onClick={() => handleOpenExpenseModal(exp)} className="text-black hover:text-gray-600 font-medium text-sm">Editar</button>
-                                                    <button onClick={() => handleDeleteExpenseClick(exp.id)} className="ml-3 text-red-600 hover:text-red-800 font-medium text-sm">Eliminar</button>
-                                                </>
-                                            ) : <span className="text-gray-400 text-sm">Solo lectura</span>}
-                                        </td>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="border-b bg-gray-50">
+                                        <th className="p-3">Fecha</th>
+                                        <th className="p-3">Descripción</th>
+                                        <th className="p-3">Categoría</th>
+                                        <th className="p-3 text-right">Monto</th>
+                                        <th className="p-3 text-center">Acciones</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(exp => (
+                                        <tr key={exp.id} className="border-b hover:bg-gray-50">
+                                            <td className="p-3 text-sm text-black">{new Date(exp.date).toLocaleDateString()}</td>
+                                            <td className="p-3 font-medium">{exp.description}</td>
+                                            <td className="p-3">{budgetCategories.find(c => c.id === exp.categoryId)?.name}</td>
+                                            <td className="p-3 text-right font-semibold">${exp.amount.toFixed(2)}</td>
+                                            <td className="p-3 text-center whitespace-nowrap">
+                                                {canEdit ? (
+                                                    <>
+                                                        <button onClick={() => handleOpenExpenseModal(exp)} className="text-black hover:text-gray-600 font-medium text-sm">Editar</button>
+                                                        <button onClick={() => handleDeleteExpenseClick(exp.id)} className="ml-3 text-red-600 hover:text-red-800 font-medium text-sm">Eliminar</button>
+                                                    </>
+                                                ) : <span className="text-gray-400 text-sm">Solo lectura</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {expenses.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="p-4 text-center text-gray-500">No hay gastos registrados.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </Card>
                 </div>
                 <div className="space-y-6">
@@ -211,7 +241,7 @@ const Budget: React.FC = () => {
                         </div>
                     </Card>
                     <Card title="Resumen de Categorías">
-                        <div className="space-y-3 mb-4">
+                        <div className="space-y-3 mb-4 max-h-[500px] overflow-y-auto pr-1">
                             {budgetCategories.map(cat => {
                                 const spent = expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
                                 const progress = cat.allocated > 0 ? (spent / cat.allocated) * 100 : 0;
@@ -237,6 +267,9 @@ const Budget: React.FC = () => {
                                     </div>
                                 )
                             })}
+                            {budgetCategories.length === 0 && (
+                                <p className="text-center text-gray-500 text-sm py-2">No hay categorías definidas.</p>
+                            )}
                         </div>
                         {canEdit && (
                             <button onClick={() => handleOpenCategoryModal()} className="w-full py-2 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors font-medium">
@@ -250,7 +283,7 @@ const Budget: React.FC = () => {
             <Modal isOpen={isExpenseModalOpen} onClose={handleCloseExpenseModal} title={isEditingExpense ? 'Editar Gasto' : 'Añadir Nuevo Gasto'}>
                 <div className="space-y-4">
                     <input type="text" placeholder="Descripción" value={currentExpense.description || ''} onChange={e => {setCurrentExpense({...currentExpense, description: e.target.value}); setValidationError('');}} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
-                    <input type="number" placeholder="Monto" value={currentExpense.amount || ''} onChange={e => {setCurrentExpense({...currentExpense, amount: parseFloat(e.target.value) || 0}); setValidationError('');}} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <input type="number" placeholder="Monto" value={currentExpense.amount ?? ''} onChange={e => {setCurrentExpense({...currentExpense, amount: parseFloat(e.target.value) || 0}); setValidationError('');}} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
                     <select value={currentExpense.categoryId || ''} onChange={e => {setCurrentExpense({...currentExpense, categoryId: e.target.value}); setValidationError('');}} className="w-full p-2 border rounded bg-white text-black">
                         <option value="">Seleccionar Categoría</option>
                         {budgetCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
@@ -264,7 +297,7 @@ const Budget: React.FC = () => {
             <Modal isOpen={isCategoryModalOpen} onClose={handleCloseCategoryModal} title={isEditingCategory ? 'Editar Categoría' : 'Añadir Nueva Categoría'}>
                 <div className="space-y-4">
                     <input type="text" placeholder="Nombre de la Categoría" value={currentCategory.name || ''} onChange={e => {setCurrentCategory({...currentCategory, name: e.target.value}); setValidationError('');}} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
-                    <input type="number" placeholder="Monto Asignado" value={currentCategory.allocated || ''} onChange={e => {setCurrentCategory({...currentCategory, allocated: parseFloat(e.target.value) || 0}); setValidationError('');}} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
+                    <input type="number" placeholder="Monto Asignado" value={currentCategory.allocated ?? ''} onChange={e => {setCurrentCategory({...currentCategory, allocated: parseFloat(e.target.value) || 0}); setValidationError('');}} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500" />
                     {validationError && <p className="text-red-600 text-sm">{validationError}</p>}
                     <button onClick={handleSaveCategory} className="w-full py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Guardar</button>
                 </div>
