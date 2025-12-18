@@ -5,6 +5,7 @@ import Card from './ui/Card';
 import Modal from './ui/Modal';
 import ConfirmModal from './ui/ConfirmModal';
 import ProgressBar from './ui/ProgressBar';
+import ExcelImportModal from './ui/ExcelImportModal';
 import { useProject } from '../contexts/ProjectContext';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -15,9 +16,6 @@ const Budget: React.FC = () => {
     const budgetCategories = projectData.budgetCategories;
     const expenses = projectData.expenses;
     
-    // Note: Total project budget storage is simplified to sum of categories for this DB version
-    // or could be added to Project table. For now, we derive it from categories allocation.
-    
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
     const [currentExpense, setCurrentExpense] = useState<Partial<Expense>>({});
     const [isEditingExpense, setIsEditingExpense] = useState(false);
@@ -25,6 +23,9 @@ const Budget: React.FC = () => {
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
     const [currentCategory, setCurrentCategory] = useState<Partial<BudgetCategory>>({});
     const [isEditingCategory, setIsEditingCategory] = useState(false);
+
+    // Import Modal State
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, id: string | null, name: string}>({isOpen: false, id: null, name: ''});
     const [validationError, setValidationError] = useState<string>('');
@@ -131,7 +132,6 @@ const Budget: React.FC = () => {
         }
         
         try {
-            // Explicitly construct payload to ensure clean data
             const categoryData = {
                 name: currentCategory.name,
                 allocated: Number(currentCategory.allocated)
@@ -149,15 +149,70 @@ const Budget: React.FC = () => {
         }
     };
 
+    // Excel Import Logic for Expenses
+    const handleImportExpenses = async (data: any[]) => {
+        let count = 0;
+        let skippedCount = 0;
+        
+        for (const row of data) {
+            // Match category by name (case insensitive)
+            const categoryName = row['Categoría'];
+            const category = budgetCategories.find(c => 
+                c.name.trim().toLowerCase() === categoryName?.toString().trim().toLowerCase()
+            );
+            
+            if (!category) {
+                skippedCount++;
+                continue; 
+            }
+
+            const parseDate = (val: any) => {
+                if (!val) return new Date().toISOString().split('T')[0];
+                if (typeof val === 'number') {
+                    const date = new Date((val - (25567 + 2)) * 86400 * 1000);
+                    return date.toISOString().split('T')[0];
+                }
+                try {
+                    const date = new Date(val);
+                    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+                } catch(e) {}
+                return new Date().toISOString().split('T')[0];
+            };
+
+            const newExpense = {
+                description: row['Descripción'] || 'Sin descripción',
+                amount: Number(row['Monto']) || 0,
+                categoryId: category.id,
+                date: parseDate(row['Fecha']),
+                id: `exp-imp-${Date.now()}-${count}`
+            };
+
+            if (newExpense.description && !isNaN(newExpense.amount)) {
+                await addItem('expenses', newExpense);
+                count++;
+            }
+        }
+        
+        if (skippedCount > 0) {
+            alert(`${count} gastos importados. ${skippedCount} filas fueron omitidas porque la categoría no existe en el proyecto. Asegúrese de crear las categorías primero.`);
+        }
+    };
+
 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-semibold text-black">Control de Presupuesto</h2>
                 {canEdit && (
-                    <button onClick={() => handleOpenExpenseModal()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
-                        Añadir Gasto
-                    </button>
+                    <div className="flex gap-2">
+                        <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            Importar Excel
+                        </button>
+                        <button onClick={() => handleOpenExpenseModal()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
+                            Añadir Gasto
+                        </button>
+                    </div>
                 )}
             </div>
             
@@ -302,6 +357,15 @@ const Budget: React.FC = () => {
                     <button onClick={handleSaveCategory} className="w-full py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Guardar</button>
                 </div>
             </Modal>
+
+            <ExcelImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onImport={handleImportExpenses}
+                title="Importar Gastos desde Excel"
+                expectedColumns={['Fecha', 'Descripción', 'Monto', 'Categoría']}
+                templateFileName="plantilla_gastos.xlsx"
+            />
 
             <ConfirmModal
                 isOpen={deleteConfirmation.isOpen}
