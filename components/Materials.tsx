@@ -5,12 +5,12 @@ import Card from './ui/Card';
 import Modal from './ui/Modal';
 import ConfirmModal from './ui/ConfirmModal';
 import ExcelImportModal from './ui/ExcelImportModal';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { useProject } from '../contexts/ProjectContext';
 
-interface Supplier {
-    name: string;
-    description: string;
+interface GroundingSource {
+    uri: string;
+    title: string;
 }
 
 const Materials: React.FC = () => {
@@ -29,7 +29,8 @@ const Materials: React.FC = () => {
     const [isEditingOrder, setIsEditingOrder] = useState(false);
 
     const [isSuppliersModalOpen, setIsSuppliersModalOpen] = useState(false);
-    const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
+    const [suppliersMarkdown, setSuppliersMarkdown] = useState<string>('');
+    const [suppliersSources, setSuppliersSources] = useState<GroundingSource[]>([]);
     const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
     const [suppliersError, setSuppliersError] = useState<string | null>(null);
     const [selectedMaterialForSuppliers, setSelectedMaterialForSuppliers] = useState<Material | null>(null);
@@ -210,55 +211,47 @@ const Materials: React.FC = () => {
         setSelectedMaterialForSuppliers(material);
         setIsSuppliersModalOpen(true);
         setIsLoadingSuppliers(true);
-        setSuppliersList([]);
+        setSuppliersMarkdown('');
+        setSuppliersSources([]);
         setSuppliersError(null);
         
         try {
-            // FIX: Initialize GoogleGenAI with named apiKey parameter and use gemini-3-flash-preview for text reasoning.
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: `Encuentra al menos 3 proveedores de '${material.name}' cerca de '${material.location}'.`,
+                contents: `Busca en internet proveedores reales para '${material.name}' en la zona de '${material.location}'. Proporciona una lista detallada con nombres de tiendas, direcciones si están disponibles y por qué son buenas opciones.`,
                 config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                name: {
-                                    type: Type.STRING,
-                                    description: 'El nombre del proveedor.'
-                                },
-                                description: {
-                                    type: Type.STRING,
-                                    description: 'Una breve descripción, dirección o información de contacto del proveedor.'
-                                }
-                            },
-                            required: ['name', 'description'],
-                            propertyOrdering: ["name", "description"]
-                        }
-                    }
+                    tools: [{ googleSearch: {} }],
                 }
             });
             
-            const jsonStr = response.text.trim();
-            const parsedSuppliers = JSON.parse(jsonStr) as Supplier[];
-            setSuppliersList(parsedSuppliers);
+            const text = response.text;
+            setSuppliersMarkdown(text || 'No se encontró información detallada.');
+
+            // Extraer fuentes de grounding
+            const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+            const sources: GroundingSource[] = chunks
+                .filter(chunk => chunk.web)
+                .map(chunk => ({
+                    uri: chunk.web!.uri,
+                    title: chunk.web!.title || 'Sitio Web'
+                }));
+            
+            // Eliminar duplicados por URI
+            const uniqueSources = Array.from(new Map(sources.map(s => [s.uri, s])).values());
+            setSuppliersSources(uniqueSources);
 
         } catch (error) {
             console.error("Error al buscar proveedores:", error);
-            setSuppliersError('No se pudieron encontrar proveedores en este momento. Inténtelo de nuevo más tarde.');
+            setSuppliersError('Error al conectar con el servicio de búsqueda. Verifica tu conexión a internet.');
         } finally {
             setIsLoadingSuppliers(false);
         }
     };
 
-    // Excel Import Logic
     const handleImportMaterials = async (data: any[]) => {
         let count = 0;
         for (const row of data) {
-            // Map Excel columns to Material props
             const newMaterial: Partial<Material> = {
                 name: row['Nombre'],
                 description: row['Descripción'] || '',
@@ -269,7 +262,6 @@ const Materials: React.FC = () => {
                 location: row['Ubicación'] || ''
             };
 
-            // Basic validation
             if (newMaterial.name && typeof newMaterial.quantity === 'number') {
                 await addItem('materials', { ...newMaterial, id: `mat-imp-${Date.now()}-${count}` });
                 count++;
@@ -479,20 +471,39 @@ const Materials: React.FC = () => {
             >
                 {isLoadingSuppliers ? (
                     <div className="text-center p-8">
-                        <p className="text-black">Buscando proveedores cercanos...</p>
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                        <p className="text-black font-medium">Buscando proveedores reales en la web...</p>
                     </div>
                 ) : suppliersError ? (
                     <div className="p-4 bg-red-100 text-red-800 rounded-md">
                         {suppliersError}
                     </div>
-                ) : suppliersList.length > 0 ? (
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto p-1">
-                        {suppliersList.map((supplier, index) => (
-                            <div key={index} className="p-4 border rounded-lg bg-gray-50">
-                                <h4 className="font-bold text-black">{supplier.name}</h4>
-                                <p className="text-black mt-1">{supplier.description}</p>
+                ) : suppliersMarkdown ? (
+                    <div className="space-y-6 max-h-[70vh] overflow-y-auto p-1">
+                        <div className="prose prose-sm text-black whitespace-pre-wrap">
+                            {suppliersMarkdown}
+                        </div>
+                        
+                        {suppliersSources.length > 0 && (
+                            <div className="border-t pt-4 mt-4">
+                                <h4 className="text-sm font-bold text-gray-700 mb-2">Fuentes Encontradas:</h4>
+                                <ul className="space-y-2">
+                                    {suppliersSources.map((source, idx) => (
+                                        <li key={idx}>
+                                            <a 
+                                                href={source.uri} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-primary-600 hover:underline text-xs flex items-center gap-1"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 00-2 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                {source.title}
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
-                        ))}
+                        )}
                     </div>
                 ) : (
                     <div className="text-center p-8">
