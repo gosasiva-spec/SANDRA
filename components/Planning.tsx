@@ -20,7 +20,6 @@ const GanttChart: React.FC<{
 }> = ({ tasks, onUpdateTask, canEdit }) => {
     const ganttContainerRef = useRef<HTMLDivElement>(null);
     const [timeScale, setTimeScale] = useState<TimeScale>('day');
-    const [isDownloading, setIsDownloading] = useState(false);
     
     const [dragInfo, setDragInfo] = useState<{
         task: Task;
@@ -207,6 +206,7 @@ const Planning: React.FC = () => {
     const [currentTask, setCurrentTask] = useState<Partial<Task>>({});
     const [isEditing, setIsEditing] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, id: string | null, name: string}>({isOpen: false, id: null, name: ''});
 
     const handleOpenModal = (task?: Task) => {
         if (!canEdit) return;
@@ -232,8 +232,10 @@ const Planning: React.FC = () => {
 
     const handleSave = async () => {
         if (!currentTask.name || !currentTask.startDate || !currentTask.endDate) return;
-        const totalValue = (currentTask.totalVolume || 0) * (currentTask.unitPrice || 0);
-        const taskData = { ...currentTask, totalValue };
+        
+        // El totalValue sigue representando solo la mano de obra para no romper el dashboard/labor
+        const laborValue = (currentTask.totalVolume || 0) * (currentTask.unitPrice || 0);
+        const taskData = { ...currentTask, totalValue: laborValue };
         
         if (isEditing && currentTask.id) {
             await updateItem('tasks', currentTask.id, taskData);
@@ -263,7 +265,13 @@ const Planning: React.FC = () => {
         setCurrentTask({ ...currentTask, materialAssignments: assignments });
     };
 
-    // Vistas secundarias: Mano de Obra (Destajos) y Materiales
+    const calculateMaterialCost = (task: Partial<Task>) => {
+        return (task.materialAssignments || []).reduce((acc, asg) => {
+            const mat = materials.find(m => m.id === asg.materialId);
+            return acc + (asg.quantity * (mat?.unitCost || 0));
+        }, 0);
+    };
+
     const renderLaborView = () => (
         <Card>
             <div className="flex justify-between items-center mb-4">
@@ -321,12 +329,15 @@ const Planning: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {tasks.filter(t => t.materialAssignments && t.materialAssignments.length > 0).map(task => (
                     <div key={task.id} className="p-4 border rounded-xl bg-gray-50 shadow-sm">
-                        <h4 className="font-bold text-primary-800 border-b pb-2 mb-3 flex justify-between items-center">
-                            {task.name}
-                            <span className="text-[10px] bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">
+                        <div className="flex justify-between items-start border-b pb-2 mb-3">
+                            <div>
+                                <h4 className="font-bold text-primary-800">{task.name}</h4>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase">Inversión Material: ${calculateMaterialCost(task).toLocaleString()}</p>
+                            </div>
+                            <span className="text-[10px] bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-bold">
                                 {task.materialAssignments?.length} items
                             </span>
-                        </h4>
+                        </div>
                         <div className="space-y-2">
                             {task.materialAssignments?.map(asg => {
                                 const mat = materials.find(m => m.id === asg.materialId);
@@ -354,29 +365,25 @@ const Planning: React.FC = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-black text-black tracking-tight">Planificación Maestro</h2>
-                    <p className="text-sm text-gray-500">Gestión integrada de cronograma, personal y suministros</p>
+                    <h2 className="text-3xl font-black text-black tracking-tight">Planificación Estratégica</h2>
+                    <p className="text-sm text-gray-500">Gestión de costos totales por actividad (Mano de Obra + Materiales)</p>
                 </div>
                 {canEdit && (
                     <div className="flex gap-2">
                         <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-white border border-gray-300 text-black rounded-lg hover:bg-gray-50 font-bold text-sm shadow-sm transition-all">Importar</button>
-                        <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-bold text-sm shadow-md transition-all">Nueva Tarea</button>
+                        <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-bold text-sm shadow-md transition-all">Nueva Actividad</button>
                     </div>
                 )}
             </div>
 
-            {/* Navegación de Pestañas de Planificación */}
             <div className="flex p-1 bg-gray-200 rounded-xl w-full md:w-fit no-print">
                 <button onClick={() => setMainTab('cronograma')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'cronograma' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     Cronograma
                 </button>
                 <button onClick={() => setMainTab('destajos')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'destajos' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                    Mano de Obra (Destajos)
+                    Destajos
                 </button>
                 <button onClick={() => setMainTab('materiales')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'materiales' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                     Materiales
                 </button>
             </div>
@@ -385,27 +392,45 @@ const Planning: React.FC = () => {
                 <>
                     <GanttChart tasks={tasks} onUpdateTask={(t) => updateItem('tasks', t.id, t)} canEdit={canEdit} />
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {tasks.map(task => (
-                            <Card key={task.id} className="relative overflow-hidden group border hover:border-primary-300 transition-all cursor-pointer" onClick={() => handleOpenModal(task)}>
-                                <div className="flex justify-between items-start mb-3">
-                                    <h4 className="font-bold text-black group-hover:text-primary-600 transition-colors">{task.name}</h4>
-                                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${task.status === 'Completado' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                        {task.status}
-                                    </span>
-                                </div>
-                                <div className="space-y-2 mb-4">
-                                    <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                        {workers.find(w => w.id === task.assignedWorkerId)?.name || 'Sin Asignar'}
+                        {tasks.map(task => {
+                            const laborCost = (task.totalVolume || 0) * (task.unitPrice || 0);
+                            const materialCost = calculateMaterialCost(task);
+                            const totalCost = laborCost + materialCost;
+                            const progress = (task.totalVolume && task.totalVolume > 0) ? ((task.completedVolume || 0) / (task.totalVolume || 0)) * 100 : 0;
+
+                            return (
+                                <Card key={task.id} className="relative overflow-hidden group border hover:border-primary-300 transition-all cursor-pointer" onClick={() => handleOpenModal(task)}>
+                                    <div className="flex justify-between items-start mb-3">
+                                        <h4 className="font-bold text-black group-hover:text-primary-600 transition-colors truncate pr-2">{task.name}</h4>
+                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${task.status === 'Completado' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                            {task.status}
+                                        </span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                        {format(new Date(task.startDate), 'dd MMM')} - {format(new Date(task.endDate), 'dd MMM')}
+                                    
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                        <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Mano de Obra</p>
+                                            <p className="text-xs font-bold text-black">${laborCost.toLocaleString()}</p>
+                                        </div>
+                                        <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Materiales</p>
+                                            <p className="text-xs font-bold text-black">${materialCost.toLocaleString()}</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <ProgressBar value={(task.totalVolume || 0) > 0 ? ((task.completedVolume || 0) / (task.totalVolume || 0)) * 100 : 0} color={task.status === 'Completado' ? 'green' : 'blue'} />
-                            </Card>
-                        ))}
+
+                                    <div className="flex justify-between items-center mb-4">
+                                        <div className="text-[10px] font-bold text-primary-600">PRECIO TOTAL: ${totalCost.toLocaleString()}</div>
+                                        <div className="text-[10px] font-bold text-gray-400 uppercase">{format(new Date(task.startDate), 'dd MMM')} - {format(new Date(task.endDate), 'dd MMM')}</div>
+                                    </div>
+
+                                    <ProgressBar value={progress} color={task.status === 'Completado' ? 'green' : 'blue'} />
+                                    <div className="flex justify-between mt-1 text-[9px] font-bold text-gray-500">
+                                        <span>PROGRESO</span>
+                                        <span>{progress.toFixed(0)}%</span>
+                                    </div>
+                                </Card>
+                            );
+                        })}
                     </div>
                 </>
             )}
@@ -413,10 +438,8 @@ const Planning: React.FC = () => {
             {mainTab === 'destajos' && renderLaborView()}
             {mainTab === 'materiales' && renderMaterialView()}
 
-            {/* Modal Maestro de Tarea */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`${isEditing ? 'Configurar' : 'Nueva'} Tarea Estratégica`}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`${isEditing ? 'Gestionar' : 'Nueva'} Actividad de Obra`}>
                 <div className="space-y-6">
-                    {/* Tabs del Modal */}
                     <div className="flex border-b">
                         {(['general', 'labor', 'materials'] as TaskModalTab[]).map(tab => (
                             <button 
@@ -432,8 +455,8 @@ const Planning: React.FC = () => {
                     {activeModalTab === 'general' && (
                         <div className="space-y-4">
                             <div>
-                                <label className="text-[10px] font-bold text-gray-400 uppercase">Nombre de la Actividad</label>
-                                <input type="text" value={currentTask.name || ''} onChange={e => setCurrentTask({...currentTask, name: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" placeholder="Ej. Aplanado de Muros Exteriores" />
+                                <label className="text-[10px] font-bold text-gray-400 uppercase">Actividad</label>
+                                <input type="text" value={currentTask.name || ''} onChange={e => setCurrentTask({...currentTask, name: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -459,8 +482,9 @@ const Planning: React.FC = () => {
 
                     {activeModalTab === 'labor' && (
                         <div className="space-y-4 bg-gray-50 p-4 rounded-xl border">
+                            <h4 className="text-xs font-black text-primary-700 uppercase mb-2">Configuración de Destajo</h4>
                             <div>
-                                <label className="text-[10px] font-bold text-primary-600 uppercase">Trabajador Asignado (Destajista)</label>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase">Destajista Responsable</label>
                                 <select value={currentTask.assignedWorkerId || ''} onChange={e => setCurrentTask({...currentTask, assignedWorkerId: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black">
                                     <option value="">Seleccionar Personal...</option>
                                     {workers.map(w => <option key={w.id} value={w.id}>{w.name} - {w.role}</option>)}
@@ -482,14 +506,14 @@ const Planning: React.FC = () => {
                                     <input type="number" value={currentTask.completedVolume || 0} onChange={e => setCurrentTask({...currentTask, completedVolume: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-bold text-blue-600" />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Precio Unitario ($)</label>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Precio por Unidad ($)</label>
                                     <input type="number" value={currentTask.unitPrice || 0} onChange={e => setCurrentTask({...currentTask, unitPrice: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" />
                                 </div>
                             </div>
                             <div className="p-3 bg-white rounded-lg border-2 border-primary-100 flex justify-between items-center shadow-inner">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase">A Pagar (Avance Real):</span>
-                                <span className="text-xl font-black text-green-600">
-                                    ${((currentTask.completedVolume || 0) * (currentTask.unitPrice || 0)).toLocaleString()}
+                                <span className="text-[10px] font-bold text-gray-500 uppercase">Presupuesto Mano de Obra:</span>
+                                <span className="text-xl font-black text-primary-600">
+                                    ${((currentTask.totalVolume || 0) * (currentTask.unitPrice || 0)).toLocaleString()}
                                 </span>
                             </div>
                         </div>
@@ -497,10 +521,11 @@ const Planning: React.FC = () => {
 
                     {activeModalTab === 'materials' && (
                         <div className="space-y-4">
+                            <h4 className="text-xs font-black text-primary-700 uppercase mb-2">Vincular Insumos de Inventario</h4>
                             <div className="flex gap-2">
                                 <select id="planning-mat-sel" className="flex-1 p-2 border rounded-lg bg-white text-black text-sm">
-                                    <option value="">Vincular Material de Inventario...</option>
-                                    {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.quantity} {m.unit} disp.)</option>)}
+                                    <option value="">Seleccionar Material...</option>
+                                    {materials.map(m => <option key={m.id} value={m.id}>{m.name} (${m.unitCost}/{m.unit})</option>)}
                                 </select>
                                 <button 
                                     onClick={() => {
@@ -516,10 +541,10 @@ const Planning: React.FC = () => {
                                 {currentTask.materialAssignments?.map(asg => {
                                     const mat = materials.find(m => m.id === asg.materialId);
                                     return (
-                                        <div key={asg.materialId} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border">
+                                        <div key={asg.materialId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                                             <div className="flex-1">
                                                 <p className="text-sm font-bold text-black">{mat?.name}</p>
-                                                <p className="text-[10px] text-gray-500">Stock actual: {mat?.quantity} {mat?.unit}</p>
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase">Costo: ${(asg.quantity * (mat?.unitCost || 0)).toLocaleString()}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <input 
@@ -528,6 +553,7 @@ const Planning: React.FC = () => {
                                                     onChange={e => handleUpdateMaterialQty(asg.materialId, parseFloat(e.target.value) || 0)}
                                                     className="w-16 p-1 border rounded bg-white text-center font-bold text-xs"
                                                 />
+                                                <span className="text-[10px] text-gray-400 font-bold uppercase w-10">{mat?.unit}</span>
                                                 <button onClick={() => handleRemoveMaterial(asg.materialId)} className="text-red-500 hover:bg-red-50 p-1 rounded-md">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                 </button>
@@ -536,17 +562,37 @@ const Planning: React.FC = () => {
                                     );
                                 })}
                                 {currentTask.materialAssignments?.length === 0 && (
-                                    <p className="text-center text-gray-400 text-xs py-4">No hay materiales vinculados a esta tarea.</p>
+                                    <p className="text-center text-gray-400 text-xs py-8 border-2 border-dashed rounded-lg">No hay materiales vinculados a esta actividad.</p>
                                 )}
                             </div>
                         </div>
                     )}
 
-                    <div className="pt-4 border-t">
-                        <button onClick={handleSave} className="w-full py-3 bg-primary-600 text-white rounded-xl font-bold shadow-lg hover:bg-primary-700 transition-all flex items-center justify-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                            Finalizar Configuración de Tarea
+                    <div className="pt-4 border-t sticky bottom-0 bg-white">
+                        <div className="mb-4 bg-primary-50 p-4 rounded-xl border-2 border-primary-100">
+                             <h5 className="text-xs font-black text-primary-800 uppercase mb-2">Resumen Financiero Total de la Actividad</h5>
+                             <div className="flex justify-between items-end">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase">Mano de Obra: ${( (currentTask.totalVolume || 0) * (currentTask.unitPrice || 0) ).toLocaleString()}</p>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase">Materiales: ${calculateMaterialCost(currentTask).toLocaleString()}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase">Precio Total Estimado</p>
+                                    <p className="text-2xl font-black text-black">${(( (currentTask.totalVolume || 0) * (currentTask.unitPrice || 0) ) + calculateMaterialCost(currentTask)).toLocaleString()}</p>
+                                </div>
+                             </div>
+                        </div>
+                        <button onClick={handleSave} className="w-full py-3 bg-primary-600 text-white rounded-xl font-bold shadow-lg hover:bg-primary-700 transition-all">
+                            Guardar Configuración de Actividad
                         </button>
+                        {isEditing && (
+                            <button 
+                                onClick={() => setDeleteConfirmation({isOpen: true, id: currentTask.id!, name: currentTask.name!})} 
+                                className="w-full mt-2 py-2 text-red-600 font-bold text-xs hover:bg-red-50 rounded-lg transition-all"
+                            >
+                                Eliminar Actividad
+                            </button>
+                        )}
                     </div>
                 </div>
             </Modal>
@@ -570,6 +616,21 @@ const Planning: React.FC = () => {
                 }}
                 title="Cargar Tareas Maestro"
                 expectedColumns={['Nombre', 'Inicio', 'Fin', 'Volumen', 'Unidad', 'Precio']}
+            />
+
+            <ConfirmModal
+                isOpen={deleteConfirmation.isOpen}
+                onClose={() => setDeleteConfirmation({ isOpen: false, id: null, name: '' })}
+                onConfirm={async () => {
+                    if (deleteConfirmation.id) {
+                        await deleteItem('tasks', deleteConfirmation.id);
+                        setIsModalOpen(false);
+                    }
+                }}
+                title="Eliminar Actividad"
+                message={`¿Estás seguro de que quieres eliminar "${deleteConfirmation.name}"? Los datos financieros vinculados a esta tarea se perderán.`}
+                confirmText="Eliminar"
+                isDangerous={true}
             />
         </div>
     );
