@@ -5,9 +5,9 @@ import Card from './ui/Card';
 import Modal from './ui/Modal';
 import ConfirmModal from './ui/ConfirmModal';
 import ProgressBar from './ui/ProgressBar';
-import ExcelImportModal from './ui/ExcelImportModal';
+import CsvImportModal from './ui/CsvImportModal';
 import { useProject } from '../contexts/ProjectContext';
-import { addDays, format, differenceInDays, startOfWeek, addWeeks, addMonths, endOfWeek, parseISO } from 'date-fns';
+import { addDays, format, differenceInDays, startOfWeek, addWeeks, addMonths, endOfWeek } from 'date-fns';
 
 type TimeScale = 'day' | 'week' | 'month';
 type TaskModalTab = 'general' | 'labor' | 'materials';
@@ -18,9 +18,7 @@ const GanttChart: React.FC<{
     onUpdateTask: (task: Task) => void;
     canEdit: boolean;
 }> = ({ tasks, onUpdateTask, canEdit }) => {
-    const ganttContainerRef = useRef<HTMLDivElement>(null);
     const [timeScale, setTimeScale] = useState<TimeScale>('day');
-    
     const [dragInfo, setDragInfo] = useState<{
         task: Task;
         action: 'move' | 'resize-end' | 'resize-start';
@@ -159,7 +157,7 @@ const GanttChart: React.FC<{
                             </div>
                         ))}
                     </div>
-                    {sortedTasks.map((task, idx) => {
+                    {sortedTasks.map((task) => {
                         const startPx = dateToPixel(new Date(task.startDate));
                         const endPx = dateToPixel(new Date(task.endDate));
                         const width = Math.max(columnWidth, endPx - startPx + (timeScale === 'day' ? columnWidth : 0));
@@ -207,13 +205,13 @@ const Planning: React.FC = () => {
     const [activeModalTab, setActiveModalTab] = useState<TaskModalTab>('general');
     const [currentTask, setCurrentTask] = useState<Partial<Task>>({});
     const [isEditing, setIsEditing] = useState(false);
-    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
     const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, id: string | null, name: string}>({isOpen: false, id: null, name: ''});
 
     const filteredTasks = useMemo(() => {
-        if (listFilter === 'base') return tasks.filter(t => !t.isExtraordinary);
-        if (listFilter === 'extraordinary') return tasks.filter(t => t.isExtraordinary);
-        return tasks;
+        const base = listFilter === 'base' ? tasks.filter(t => !t.isExtraordinary) :
+                     listFilter === 'extraordinary' ? tasks.filter(t => t.isExtraordinary) : tasks;
+        return [...base].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
     }, [tasks, listFilter]);
 
     const handleOpenModal = (task?: Task, forceExtraordinary: boolean = false) => {
@@ -254,8 +252,11 @@ const Planning: React.FC = () => {
     };
 
     const handleQuickAdvance = async (task: Task, advance: number) => {
-        const newCompleted = Math.min(task.totalVolume || 0, advance);
-        const status = newCompleted >= (task.totalVolume || 0) ? 'Completado' : 'En Progreso';
+        const newCompleted = Math.max(0, Math.min(task.totalVolume || 0, advance));
+        let status: Task['status'] = 'En Progreso';
+        if (newCompleted <= 0) status = 'No Iniciado';
+        if (newCompleted >= (task.totalVolume || 0)) status = 'Completado';
+        
         await updateItem('tasks', task.id, { completedVolume: newCompleted, status });
     };
 
@@ -269,7 +270,6 @@ const Planning: React.FC = () => {
     const handleAddMaterialToTask = (materialId: string) => {
         const assignments = [...(currentTask.materialAssignments || [])];
         if (assignments.some(asg => asg.materialId === materialId)) return;
-        
         assignments.push({ materialId, quantity: 1 });
         setCurrentTask({ ...currentTask, materialAssignments: assignments });
     };
@@ -286,125 +286,16 @@ const Planning: React.FC = () => {
         setCurrentTask({ ...currentTask, materialAssignments: assignments });
     };
 
-    const parseExcelDate = (serial: any) => {
-        if (!serial) return format(new Date(), 'yyyy-MM-dd');
-        if (typeof serial === 'number') {
-            // Excel serial dates start from 1900-01-01
-            const date = new Date((serial - 25569) * 86400 * 1000);
-            return format(date, 'yyyy-MM-dd');
-        }
-        try {
-            const d = new Date(serial);
-            if (!isNaN(d.getTime())) return format(d, 'yyyy-MM-dd');
-        } catch (e) {}
-        return format(new Date(), 'yyyy-MM-dd');
-    };
-
-    const renderLaborView = () => (
-        <Card>
-            <div className="flex justify-between items-center mb-4 text-black">
-                <h3 className="text-xl font-bold">Control Maestro de Destajos</h3>
-                <div className="text-right">
-                    <p className="text-[10px] text-gray-400 uppercase font-bold">Total Producido en Obra</p>
-                    <p className="text-xl font-black text-green-600">
-                        ${filteredTasks.reduce((acc, t) => acc + ((t.completedVolume || 0) * (t.unitPrice || 0)), 0).toLocaleString()}
-                    </p>
-                </div>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-black">
-                    <thead>
-                        <tr className="bg-gray-100 border-b">
-                            <th className="p-3">Actividad</th>
-                            <th className="p-3">Trabajador Asignado</th>
-                            <th className="p-3 text-center">Volumen Total</th>
-                            <th className="p-3 text-center">Ejecutado (Avance)</th>
-                            <th className="p-3 text-right">Precio Unitario</th>
-                            <th className="p-3 text-right font-bold text-primary-700">Monto Producido</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredTasks.map(task => {
-                            const worker = workers.find(w => w.id === task.assignedWorkerId);
-                            const produced = (task.completedVolume || 0) * (task.unitPrice || 0);
-                            return (
-                                <tr key={task.id} className="border-b hover:bg-gray-50">
-                                    <td className="p-3 font-semibold">
-                                        {task.isExtraordinary && <span className="mr-2 text-[9px] bg-orange-100 text-orange-600 px-1 rounded font-bold uppercase">Extraordinario</span>}
-                                        {task.name}
-                                    </td>
-                                    <td className="p-3">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-[10px] font-bold">
-                                                {worker?.name.charAt(0) || '?'}
-                                            </div>
-                                            {worker?.name || <span className="text-gray-400 italic">Sin asignar</span>}
-                                        </div>
-                                    </td>
-                                    <td className="p-3 text-center">{task.totalVolume} {task.volumeUnit}</td>
-                                    <td className="p-3 text-center font-bold text-blue-600">{task.completedVolume} {task.volumeUnit}</td>
-                                    <td className="p-3 text-right">${(task.unitPrice || 0).toLocaleString()}</td>
-                                    <td className="p-3 text-right font-black text-green-700">${produced.toLocaleString()}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-        </Card>
-    );
-
-    const renderMaterialView = () => (
-        <Card>
-            <h3 className="text-xl font-bold text-black mb-4">Matriz de Insumos Planificados</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredTasks.filter(t => t.materialAssignments && t.materialAssignments.length > 0).map(task => (
-                    <div key={task.id} className={`p-4 border rounded-xl shadow-sm ${task.isExtraordinary ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'}`}>
-                        <div className="flex justify-between items-start border-b pb-2 mb-3">
-                            <div>
-                                <h4 className="font-bold text-primary-800">
-                                    {task.isExtraordinary && <span className="mr-1 text-[9px] bg-orange-600 text-white px-1 rounded font-bold uppercase">EXT</span>}
-                                    {task.name}
-                                </h4>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase">Inversión Material: ${calculateMaterialCost(task).toLocaleString()}</p>
-                            </div>
-                            <span className="text-[10px] bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-bold">
-                                {task.materialAssignments?.length} items
-                            </span>
-                        </div>
-                        <div className="space-y-2">
-                            {task.materialAssignments?.map(asg => {
-                                const mat = materials.find(m => m.id === asg.materialId);
-                                const isCritical = mat ? mat.quantity < asg.quantity : true;
-                                return (
-                                    <div key={asg.materialId} className="flex justify-between items-center text-xs text-black">
-                                        <span className="text-gray-600 font-medium">{mat?.name || '---'}</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`font-bold ${isCritical ? 'text-red-600' : 'text-black'}`}>
-                                                {asg.quantity} {mat?.unit}
-                                            </span>
-                                            {isCritical && <span title="Stock insuficiente en almacén" className="text-red-500 cursor-help">⚠️</span>}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </Card>
-    );
-
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-3xl font-black text-black tracking-tight">Planificación y Avances</h2>
-                    <p className="text-sm text-gray-500">Gestión de tiempos, destajos y catálogo de obra</p>
+                    <p className="text-sm text-gray-500">Gestión de tiempos, cuantificación de obra y catálogo CSV</p>
                 </div>
                 {canEdit && (
                     <div className="flex gap-2">
-                        <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-white border border-gray-300 text-black rounded-lg hover:bg-gray-50 font-bold text-sm shadow-sm transition-all flex items-center gap-2">
+                        <button onClick={() => setIsCsvModalOpen(true)} className="px-4 py-2 bg-white border border-gray-300 text-black rounded-lg hover:bg-gray-50 font-bold text-sm shadow-sm transition-all flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                             Importar Catálogo
                         </button>
@@ -413,14 +304,12 @@ const Planning: React.FC = () => {
                 )}
             </div>
 
-            {/* Sub-modulos Navigation */}
             <div className="flex p-1 bg-gray-200 rounded-xl w-full md:w-fit no-print">
                 <button onClick={() => setMainTab('cronograma')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'cronograma' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>Cronograma</button>
                 <button onClick={() => setMainTab('destajos')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'destajos' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>Mano de Obra</button>
                 <button onClick={() => setMainTab('materiales')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'materiales' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>Materiales</button>
             </div>
 
-            {/* Filters for the list */}
             <div className="flex border-b border-gray-200 no-print overflow-x-auto">
                 <button onClick={() => setListFilter('all')} className={`px-6 py-3 font-medium text-sm border-b-2 transition-all ${listFilter === 'all' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Todos</button>
                 <button onClick={() => setListFilter('base')} className={`px-6 py-3 font-medium text-sm border-b-2 transition-all ${listFilter === 'base' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Contrato Base</button>
@@ -429,51 +318,67 @@ const Planning: React.FC = () => {
 
             {mainTab === 'cronograma' && (
                 <>
-                    <GanttChart tasks={filteredTasks} onUpdateTask={(t) => updateItem('tasks', t.id, t)} canEdit={canEdit} />
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <GanttChart tasks={tasks} onUpdateTask={(t) => updateItem('tasks', t.id, t)} canEdit={canEdit} />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredTasks.map(task => {
-                            const laborCost = (task.totalVolume || 0) * (task.unitPrice || 0);
-                            const materialCost = calculateMaterialCost(task);
+                            const producedValue = (task.completedVolume || 0) * (task.unitPrice || 0);
+                            const totalPlanned = (task.totalVolume || 0) * (task.unitPrice || 0);
                             const progress = (task.totalVolume && task.totalVolume > 0) ? ((task.completedVolume || 0) / (task.totalVolume || 0)) * 100 : 0;
 
                             return (
-                                <Card key={task.id} className={`relative overflow-hidden group border hover:border-primary-300 transition-all ${task.isExtraordinary ? 'border-l-4 border-l-orange-500' : ''}`}>
+                                <Card key={task.id} className={`relative overflow-hidden group border-2 hover:border-primary-400 transition-all ${task.isExtraordinary ? 'border-orange-200' : 'border-gray-100'}`}>
                                     <div className="flex justify-between items-start mb-2">
-                                        <h4 className="font-bold text-black group-hover:text-primary-600 transition-colors truncate pr-2 cursor-pointer" onClick={() => handleOpenModal(task)}>
-                                            {task.isExtraordinary && <span className="mr-1 text-[9px] bg-orange-100 text-orange-600 px-1 rounded font-bold uppercase">Extraordinario</span>}
-                                            {task.name}
-                                        </h4>
+                                        <div className="flex-1">
+                                            <h4 className="font-bold text-black group-hover:text-primary-600 transition-colors truncate pr-2 cursor-pointer" onClick={() => handleOpenModal(task)}>
+                                                {task.isExtraordinary && <span className="mr-1 text-[9px] bg-orange-100 text-orange-600 px-1 rounded font-bold uppercase">Extraordinario</span>}
+                                                {task.name}
+                                            </h4>
+                                            <div className="flex items-center gap-1 text-[10px] text-gray-500 font-bold uppercase">
+                                                <span>F. Fin: {format(new Date(task.endDate), 'dd MMM')}</span>
+                                            </div>
+                                        </div>
                                         <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${task.status === 'Completado' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                                             {task.status}
                                         </span>
                                     </div>
                                     
-                                    <div className="flex justify-between items-center mb-3 text-[10px] font-bold text-gray-500 uppercase">
-                                        <span>Total: ${(laborCost + materialCost).toLocaleString()}</span>
-                                        <span>Vence: {format(new Date(task.endDate), 'dd MMM')}</span>
+                                    <div className="mb-4">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-[10px] font-black text-gray-400 uppercase">Avance: {progress.toFixed(1)}%</span>
+                                            <span className="text-[10px] font-black text-primary-600 uppercase">Valuación: ${producedValue.toLocaleString()}</span>
+                                        </div>
+                                        <ProgressBar value={progress} color={task.isExtraordinary ? 'yellow' : task.status === 'Completado' ? 'green' : 'blue'} />
                                     </div>
 
-                                    <ProgressBar value={progress} color={task.isExtraordinary ? 'yellow' : task.status === 'Completado' ? 'green' : 'blue'} />
-                                    
-                                    <div className="mt-4 flex flex-col gap-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase">Registrar Avance Real ({task.volumeUnit})</label>
-                                        <div className="flex gap-2">
-                                            <input 
-                                                type="number" 
-                                                defaultValue={task.completedVolume} 
-                                                onBlur={(e) => handleQuickAdvance(task, parseFloat(e.target.value) || 0)}
-                                                className="flex-1 p-1 text-xs border rounded bg-white text-black font-bold focus:ring-1 focus:ring-primary-500 outline-none"
-                                                placeholder={`0 de ${task.totalVolume}`}
-                                            />
-                                            <button 
-                                                onClick={() => handleOpenModal(task)}
-                                                className="p-1 text-primary-600 hover:bg-primary-50 rounded"
-                                                title="Editar detalles completos"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                            </button>
+                                    {canEdit && (
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <label className="text-[9px] font-black text-slate-500 uppercase mb-2 block">Registrar Cuantificación ({task.volumeUnit})</label>
+                                            <div className="flex gap-2 items-center">
+                                                <div className="relative flex-1">
+                                                    <input 
+                                                        type="number" 
+                                                        defaultValue={task.completedVolume} 
+                                                        onBlur={(e) => handleQuickAdvance(task, parseFloat(e.target.value) || 0)}
+                                                        className="w-full p-2 text-xs border rounded-lg bg-white text-black font-black focus:ring-2 focus:ring-primary-500 outline-none pr-8"
+                                                        placeholder={`Max: ${task.totalVolume}`}
+                                                    />
+                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">{task.volumeUnit}</div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleOpenModal(task)}
+                                                    className="p-2 bg-white text-primary-600 hover:text-primary-800 border rounded-lg shadow-sm"
+                                                    title="Editar detalles"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                </button>
+                                            </div>
+                                            <div className="mt-2 text-[9px] text-gray-400 flex justify-between font-bold">
+                                                <span>Restante: {(task.totalVolume || 0) - (task.completedVolume || 0)} {task.volumeUnit}</span>
+                                                <span className="text-primary-400">Total Programado: ${totalPlanned.toLocaleString()}</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </Card>
                             );
                         })}
@@ -486,138 +391,135 @@ const Planning: React.FC = () => {
                 </>
             )}
 
-            {mainTab === 'destajos' && renderLaborView()}
-            {mainTab === 'materiales' && renderMaterialView()}
+            {mainTab === 'destajos' && (
+                <Card>
+                    <div className="flex justify-between items-center mb-4 text-black">
+                        <h3 className="text-xl font-bold">Cédula de Avances y Destajos</h3>
+                        <div className="text-right">
+                            <p className="text-[10px] text-gray-400 uppercase font-bold">Producción Total Ejecutada</p>
+                            <p className="text-xl font-black text-green-600">
+                                ${tasks.reduce((acc, t) => acc + ((t.completedVolume || 0) * (t.unitPrice || 0)), 0).toLocaleString()}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-black">
+                            <thead>
+                                <tr className="bg-slate-100 border-b">
+                                    <th className="p-3">Concepto</th>
+                                    <th className="p-3">Destajista</th>
+                                    <th className="p-3 text-center">Vol. Total</th>
+                                    <th className="p-3 text-center">Avance Acum.</th>
+                                    <th className="p-3 text-right">Precio Un.</th>
+                                    <th className="p-3 text-right font-bold text-primary-700">Importe Devengado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {tasks.map(task => {
+                                    const worker = workers.find(w => w.id === task.assignedWorkerId);
+                                    const produced = (task.completedVolume || 0) * (task.unitPrice || 0);
+                                    return (
+                                        <tr key={task.id} className="border-b hover:bg-slate-50">
+                                            <td className="p-3">
+                                                <p className="font-bold">{task.name}</p>
+                                                {task.isExtraordinary && <span className="text-[9px] bg-orange-100 text-orange-600 px-1 rounded font-black uppercase">Extraordinario</span>}
+                                            </td>
+                                            <td className="p-3">{worker?.name || <span className="text-gray-400 italic">No asignado</span>}</td>
+                                            <td className="p-3 text-center">{task.totalVolume} {task.volumeUnit}</td>
+                                            <td className="p-3 text-center font-black text-primary-600">{task.completedVolume} {task.volumeUnit}</td>
+                                            <td className="p-3 text-right">${(task.unitPrice || 0).toLocaleString()}</td>
+                                            <td className="p-3 text-right font-black text-green-700">${produced.toLocaleString()}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`${isEditing ? 'Gestionar' : 'Nueva'} Actividad de Obra`}>
+            {mainTab === 'materiales' && (
+                <Card>
+                    <h3 className="text-xl font-bold text-black mb-4">Matriz de Insumos por Actividad</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {tasks.filter(t => t.materialAssignments && t.materialAssignments.length > 0).map(task => (
+                            <div key={task.id} className="p-4 border rounded-xl bg-slate-50">
+                                <h4 className="font-bold text-slate-800 border-b pb-2 mb-3">{task.name}</h4>
+                                <div className="space-y-2">
+                                    {task.materialAssignments?.map(asg => {
+                                        const mat = materials.find(m => m.id === asg.materialId);
+                                        return (
+                                            <div key={asg.materialId} className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-600">{mat?.name}</span>
+                                                <span className="font-black text-slate-900">{asg.quantity} {mat?.unit}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`${isEditing ? 'Gestionar' : 'Nueva'} Tarea`}>
                 <div className="space-y-6">
                     <div className="flex border-b">
                         {(['general', 'labor', 'materials'] as TaskModalTab[]).map(tab => (
-                            <button 
-                                key={tab} 
-                                onClick={() => setActiveModalTab(tab)} 
-                                className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${activeModalTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-400'}`}
-                            >
-                                {tab === 'general' ? 'Información' : tab === 'labor' ? 'Nómina/Destajo' : 'Insumos'}
+                            <button key={tab} onClick={() => setActiveModalTab(tab)} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${activeModalTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-400'}`}>
+                                {tab === 'general' ? 'Información' : tab === 'labor' ? 'Cuantificación' : 'Insumos'}
                             </button>
                         ))}
                     </div>
 
                     {activeModalTab === 'general' && (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg border border-orange-100">
-                                <input 
-                                    type="checkbox" 
-                                    id="extra-toggle" 
-                                    checked={currentTask.isExtraordinary || false} 
-                                    onChange={e => setCurrentTask({...currentTask, isExtraordinary: e.target.checked})}
-                                    className="h-4 w-4 text-orange-600 rounded border-orange-300 focus:ring-orange-500"
-                                />
-                                <label htmlFor="extra-toggle" className="text-xs font-bold text-orange-800 uppercase cursor-pointer">Actividad Extraordinaria</label>
-                            </div>
                             <div>
-                                <label className="text-[10px] font-bold text-gray-400 uppercase">Concepto / Actividad</label>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase">Nombre de la Actividad</label>
                                 <input type="text" value={currentTask.name || ''} onChange={e => setCurrentTask({...currentTask, name: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Inicio</label>
-                                    <input type="date" value={currentTask.startDate || ''} onChange={e => setCurrentTask({...currentTask, startDate: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Entrega Final</label>
-                                    <input type="date" value={currentTask.endDate || ''} onChange={e => setCurrentTask({...currentTask, endDate: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-400 uppercase">Estado Actual</label>
-                                <select value={currentTask.status || 'No Iniciado'} onChange={e => setCurrentTask({...currentTask, status: e.target.value as any})} className="w-full p-2 border rounded-lg bg-white text-black font-bold">
-                                    <option>No Iniciado</option>
-                                    <option>En Progreso</option>
-                                    <option>Completado</option>
-                                    <option>Retrasado</option>
-                                </select>
+                                <input type="date" value={currentTask.startDate || ''} onChange={e => setCurrentTask({...currentTask, startDate: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black" />
+                                <input type="date" value={currentTask.endDate || ''} onChange={e => setCurrentTask({...currentTask, endDate: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black" />
                             </div>
                         </div>
                     )}
 
                     {activeModalTab === 'labor' && (
-                        <div className="space-y-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                            <h4 className="text-xs font-black text-primary-700 uppercase mb-2">Configuración de Pago por Destajo</h4>
-                            <div>
-                                <label className="text-[10px] font-bold text-gray-400 uppercase">Destajista Responsable</label>
-                                <select value={currentTask.assignedWorkerId || ''} onChange={e => setCurrentTask({...currentTask, assignedWorkerId: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black font-medium">
-                                    <option value="">Sin Asignar...</option>
-                                    {workers.map(w => <option key={w.id} value={w.id}>{w.name} - {w.role}</option>)}
-                                </select>
+                        <div className="space-y-4">
+                            <select value={currentTask.assignedWorkerId || ''} onChange={e => setCurrentTask({...currentTask, assignedWorkerId: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black">
+                                <option value="">Seleccionar Destajista...</option>
+                                {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                            </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <input type="number" value={currentTask.totalVolume || 0} onChange={e => setCurrentTask({...currentTask, totalVolume: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" placeholder="Volumen Total" />
+                                <input type="text" value={currentTask.volumeUnit || ''} onChange={e => setCurrentTask({...currentTask, volumeUnit: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black" placeholder="Unidad" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Cantidad Total Programada</label>
-                                    <input type="number" value={currentTask.totalVolume || 0} onChange={e => setCurrentTask({...currentTask, totalVolume: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Unidad de Medida</label>
-                                    <input type="text" value={currentTask.volumeUnit || ''} onChange={e => setCurrentTask({...currentTask, volumeUnit: e.target.value})} className="w-full p-2 border rounded-lg bg-white text-black" placeholder="m2, ml, kg, pz" />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Avance Real Actual</label>
-                                    <input type="number" value={currentTask.completedVolume || 0} onChange={e => setCurrentTask({...currentTask, completedVolume: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-bold text-blue-600" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Precio Unitario Destajo ($)</label>
-                                    <input type="number" value={currentTask.unitPrice || 0} onChange={e => setCurrentTask({...currentTask, unitPrice: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" />
-                                </div>
-                            </div>
-                            <div className="p-3 bg-white rounded-lg border-2 border-primary-100 flex justify-between items-center shadow-inner">
-                                <span className="text-[10px] font-bold text-gray-500 uppercase">Monto Producido Hoy:</span>
-                                <span className="text-xl font-black text-primary-600">
-                                    ${((currentTask.completedVolume || 0) * (currentTask.unitPrice || 0)).toLocaleString()}
-                                </span>
+                                <input type="number" value={currentTask.completedVolume || 0} onChange={e => setCurrentTask({...currentTask, completedVolume: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-black text-blue-600" placeholder="Avance Real" />
+                                <input type="number" value={currentTask.unitPrice || 0} onChange={e => setCurrentTask({...currentTask, unitPrice: parseFloat(e.target.value) || 0})} className="w-full p-2 border rounded-lg bg-white text-black font-bold" placeholder="Precio Unitario" />
                             </div>
                         </div>
                     )}
 
                     {activeModalTab === 'materials' && (
                         <div className="space-y-4">
-                            <h4 className="text-xs font-black text-primary-700 uppercase mb-2">Vincular Materiales</h4>
                             <div className="flex gap-2 text-black">
                                 <select id="planning-mat-sel" className="flex-1 p-2 border rounded-lg bg-white text-sm">
-                                    <option value="">Seleccionar Material del Almacén...</option>
-                                    {materials.map(m => <option key={m.id} value={m.id}>{m.name} (${m.unitCost.toLocaleString()} /{m.unit})</option>)}
+                                    <option value="">Seleccionar Material...</option>
+                                    {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
-                                <button 
-                                    onClick={() => {
-                                        const sel = document.getElementById('planning-mat-sel') as HTMLSelectElement;
-                                        if (sel.value) handleAddMaterialToTask(sel.value);
-                                    }}
-                                    className="px-4 py-2 bg-primary-600 text-white rounded-lg font-bold hover:bg-primary-700 transition-all"
-                                >
-                                    Añadir
-                                </button>
+                                <button onClick={() => { const sel = document.getElementById('planning-mat-sel') as HTMLSelectElement; if (sel.value) handleAddMaterialToTask(sel.value); }} className="px-4 py-2 bg-primary-600 text-white rounded-lg font-bold">Vincular</button>
                             </div>
-                            <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2">
+                            <div className="space-y-2 max-h-[250px] overflow-y-auto">
                                 {currentTask.materialAssignments?.map(asg => {
                                     const mat = materials.find(m => m.id === asg.materialId);
                                     return (
-                                        <div key={asg.materialId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 text-black">
-                                            <div className="flex-1">
-                                                <p className="text-sm font-bold">{mat?.name}</p>
-                                                <p className="text-[10px] text-gray-500 font-bold uppercase">Inversión: ${(asg.quantity * (mat?.unitCost || 0)).toLocaleString()}</p>
-                                            </div>
+                                        <div key={asg.materialId} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 text-black">
+                                            <span className="text-sm font-bold">{mat?.name}</span>
                                             <div className="flex items-center gap-2">
-                                                <input 
-                                                    type="number" 
-                                                    value={asg.quantity} 
-                                                    onChange={e => handleUpdateMaterialQty(asg.materialId, parseFloat(e.target.value) || 0)}
-                                                    className="w-16 p-1 border rounded bg-white text-center font-bold text-xs"
-                                                />
-                                                <span className="text-[10px] text-gray-400 font-bold uppercase w-10 truncate">{mat?.unit}</span>
-                                                <button onClick={() => handleRemoveMaterial(asg.materialId)} className="text-red-500 hover:bg-red-50 p-1 rounded-md transition-colors">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
+                                                <input type="number" value={asg.quantity} onChange={e => handleUpdateMaterialQty(asg.materialId, parseFloat(e.target.value) || 0)} className="w-16 p-1 border rounded bg-white text-center font-bold text-xs" />
+                                                <button onClick={() => handleRemoveMaterial(asg.materialId)} className="text-red-500 hover:bg-red-50 p-1 rounded-md transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                                             </div>
                                         </div>
                                     );
@@ -627,38 +529,23 @@ const Planning: React.FC = () => {
                     )}
 
                     <div className="pt-4 border-t sticky bottom-0 bg-white">
-                        <div className="mb-4 bg-primary-50 p-4 rounded-xl border-2 border-primary-100">
-                             <div className="flex justify-between items-end">
-                                <div className="space-y-1">
-                                    <h5 className="text-[10px] font-black text-primary-800 uppercase">Costo Total Estimado</h5>
-                                    <p className="text-[10px] text-gray-500 font-bold uppercase">Mano de Obra: ${( (currentTask.totalVolume || 0) * (currentTask.unitPrice || 0) ).toLocaleString()}</p>
-                                    <p className="text-[10px] text-gray-500 font-bold uppercase">Materiales: ${calculateMaterialCost(currentTask).toLocaleString()}</p>
-                                </div>
-                                <div className="text-right text-black">
-                                    <p className="text-2xl font-black">${(( (currentTask.totalVolume || 0) * (currentTask.unitPrice || 0) ) + calculateMaterialCost(currentTask)).toLocaleString()}</p>
-                                </div>
-                             </div>
-                        </div>
-                        <button onClick={handleSave} className="w-full py-4 bg-primary-600 text-white rounded-xl font-black shadow-lg hover:bg-primary-700 transition-all uppercase tracking-wider">
-                            Guardar Cambios
-                        </button>
+                        <button onClick={handleSave} className="w-full py-4 bg-primary-600 text-white rounded-xl font-black shadow-lg uppercase">Guardar Cambios</button>
                     </div>
                 </div>
             </Modal>
 
-            <ExcelImportModal 
-                isOpen={isImportModalOpen} 
-                onClose={() => setIsImportModalOpen(false)} 
+            <CsvImportModal 
+                isOpen={isCsvModalOpen} 
+                onClose={() => setIsCsvModalOpen(false)} 
                 onImport={async (data) => {
                     for (const row of data) {
                         const name = row.Nombre || row.Actividad || row.Concepto;
                         if (!name) continue;
-
                         await addItem('tasks', {
                             id: `tsk-${Date.now()}-${Math.random()}`,
                             name: name.toString(),
-                            startDate: parseExcelDate(row.Inicio || row.FechaInicio),
-                            endDate: parseExcelDate(row.Fin || row.FechaFin),
+                            startDate: row.Inicio || row.FechaInicio,
+                            endDate: row.Fin || row.FechaFin,
                             status: 'No Iniciado',
                             totalVolume: parseFloat(row.Volumen || row.Cantidad) || 0,
                             unitPrice: parseFloat(row.Precio || row.PrecioUnitario) || 0,
@@ -667,20 +554,14 @@ const Planning: React.FC = () => {
                         });
                     }
                 }}
-                title="Importar Catálogo de Obra"
+                title="Importar Catálogo de Obra (CSV)"
                 expectedColumns={['Nombre', 'Inicio', 'Fin', 'Volumen', 'Unidad', 'Precio']}
-                templateFileName="catalogo_obra_template.xlsx"
             />
 
             <ConfirmModal
                 isOpen={deleteConfirmation.isOpen}
                 onClose={() => setDeleteConfirmation({ isOpen: false, id: null, name: '' })}
-                onConfirm={async () => {
-                    if (deleteConfirmation.id) {
-                        await deleteItem('tasks', deleteConfirmation.id);
-                        setIsModalOpen(false);
-                    }
-                }}
+                onConfirm={async () => { if (deleteConfirmation.id) { await deleteItem('tasks', deleteConfirmation.id); setIsModalOpen(false); } }}
                 title="Eliminar Actividad"
                 message={`¿Eliminar permanentemente "${deleteConfirmation.name}"?`}
                 confirmText="Eliminar"
