@@ -110,24 +110,57 @@ const Materials: React.FC = () => {
 
         const totalCost = (currentMaterial.quantity || 0) * (currentMaterial.unitCost || 0);
 
+        // Buscar categoría "Materiales" o similar
+        let category = budgetCategories.find(c => c.name.toLowerCase().includes('material'));
+        if (!category && budgetCategories.length > 0) {
+            category = budgetCategories[0]; // Fallback a la primera si no hay una de materiales
+        }
+
         if (isEditingMaterial && currentMaterial.id) {
             await updateItem('materials', currentMaterial.id, currentMaterial);
+
+            // Intentar buscar gasto automático existente por ID predecible
+            const expenseId = `exp-mat-${currentMaterial.id}`;
+            let existingExpense = projectData.expenses.find(e => 
+                e.id === expenseId || 
+                e.id === `exp-mat-auto-${currentMaterial.id}`
+            );
+
+            // Fallback: si no se encuentra por ID, buscar por descripción que contenga el nombre original o nuevo del material
+            if (!existingExpense) {
+                const originalMaterial = materials.find(m => m.id === currentMaterial.id);
+                existingExpense = projectData.expenses.find(e => 
+                    (e.id.startsWith('exp-mat-auto-') || e.id.startsWith('exp-mat-')) && 
+                    (e.description.includes(currentMaterial.name || '') || (originalMaterial && e.description.includes(originalMaterial.name)))
+                );
+            }
+
+            if (existingExpense) {
+                await updateItem('expenses', existingExpense.id, {
+                    description: `Compra inicial: ${currentMaterial.name} (${currentMaterial.quantity} ${currentMaterial.unit})`,
+                    amount: totalCost,
+                    categoryId: category ? category.id : existingExpense.categoryId,
+                    date: existingExpense.date || new Date().toISOString().split('T')[0]
+                });
+            } else if (category) {
+                // Si no existía un gasto anterior, crear uno nuevo con ID predecible
+                await addItem('expenses', {
+                    id: expenseId,
+                    description: `Compra inicial: ${currentMaterial.name} (${currentMaterial.quantity} ${currentMaterial.unit})`,
+                    amount: totalCost,
+                    categoryId: category.id,
+                    date: new Date().toISOString().split('T')[0]
+                });
+            }
         } else {
             // REGISTRO NUEVO: Crear material y generar gasto automático
             const materialId = `mat-${Date.now()}`;
             const newMaterial = { ...currentMaterial, id: materialId } as Material;
             await addItem('materials', newMaterial);
-            
-            // Buscar categoría "Materiales" o similar
-            let category = budgetCategories.find(c => c.name.toLowerCase().includes('material'));
-            
-            if (!category && budgetCategories.length > 0) {
-                category = budgetCategories[0]; // Fallback a la primera si no hay una de materiales
-            }
 
             if (category) {
                 await addItem('expenses', {
-                    id: `exp-mat-auto-${Date.now()}`,
+                    id: `exp-mat-${materialId}`,
                     description: `Compra inicial: ${newMaterial.name} (${newMaterial.quantity} ${newMaterial.unit})`,
                     amount: totalCost,
                     categoryId: category.id,
