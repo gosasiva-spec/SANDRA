@@ -25,6 +25,21 @@ export interface Worker {
   hourlyRate: number;
 }
 
+export interface TaskMaterial {
+  materialId: string;
+  quantity: number;
+}
+
+export interface TaskSupplier {
+  id: string;
+  name: string;
+  concept: string;
+  amount: number;
+  status: 'Pendiente' | 'Anticipado' | 'Liquidado';
+  notes?: string;
+}
+
+
 export interface Task {
   id: string;
   name: string;
@@ -39,7 +54,10 @@ export interface Task {
   volumeUnit?: string;
   photoIds?: string[];
   dependsOn?: string[];
-  totalValue?: number;
+  totalValue?: number; // totalVolume * unitPrice
+  isExtraordinary?: boolean;
+  materialAssignments?: TaskMaterial[]; // Materiales vinculados a la tarea
+  supplierAssignments?: TaskSupplier[]; // Montos unificados de proveedores vinculados a la tarea
 }
 
 export interface TimeLog {

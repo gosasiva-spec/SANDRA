@@ -114,16 +114,36 @@ const Reports: React.FC = () => {
                 data.push(['Resumen de Presupuesto por Categoría']);
                 data.push(['Categoría', 'Asignado', 'Gastado', 'Restante']);
                 budgetCategories.forEach(cat => {
-                    const spent = expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
+                    const manualSpent = expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
+                    let spent = manualSpent;
+                    if (cat.name.toLowerCase().includes('mano de obra') || cat.name.toLowerCase().includes('labor')) {
+                        const totalProducedLabor = tasks.reduce((sum, task) => sum + ((task.completedVolume || 0) * (task.unitPrice || 0)), 0);
+                        spent += totalProducedLabor;
+                    }
+                    if (cat.name.toLowerCase().includes('proveedor') || cat.name.toLowerCase().includes('subcontrat')) {
+                        const totalSupplierCosts = tasks.reduce((sum, task) => sum + (task.supplierAssignments || []).reduce((subSum, s) => subSum + (s.amount || 0), 0), 0);
+                        spent += totalSupplierCosts;
+                    }
                     data.push([cat.name, cat.allocated, spent, cat.allocated - spent]);
                 });
                 data.push([]); 
-                data.push(['Detalle de Gastos']);
+                data.push(['Detalle de Gastos Directos']);
                 data.push(['Fecha', 'Descripción', 'Categoría', 'Monto']);
                 expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).forEach(exp => {
                     const categoryName = budgetCategories.find(c => c.id === exp.categoryId)?.name || 'N/A';
                     data.push([new Date(exp.date).toLocaleDateString(), exp.description, categoryName, exp.amount]);
                 });
+                
+                // Add supplier contracts detail in budget CSV/Excel
+                data.push([]);
+                data.push(['Contratos de Proveedores y Montos Unificados']);
+                data.push(['Proveedor', 'Actividad Relacionada', 'Concepto', 'Estado de Pago', 'Monto Fijo']);
+                tasks.filter(t => t.supplierAssignments && t.supplierAssignments.length > 0).forEach(task => {
+                    (task.supplierAssignments || []).forEach(sup => {
+                        data.push([sup.name, task.name, sup.concept, sup.status, sup.amount]);
+                    });
+                });
+                
                 exportToCsv('reporte_presupuesto.csv', data);
                 break;
             }
@@ -201,12 +221,26 @@ const Reports: React.FC = () => {
     );
 
     const renderBudgetReport = () => {
+        const totalProducedLabor = tasks.reduce((sum, task) => sum + ((task.completedVolume || 0) * (task.unitPrice || 0)), 0);
+        const totalSupplierCosts = tasks.reduce((sum, task) => sum + (task.supplierAssignments || []).reduce((subSum, s) => subSum + (s.amount || 0), 0), 0);
+
+        const getCategorySpentLocal = (cat: typeof budgetCategories[0]) => {
+            const manualSpent = expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
+            if (cat.name.toLowerCase().includes('mano de obra') || cat.name.toLowerCase().includes('labor')) {
+                return manualSpent + totalProducedLabor;
+            }
+            if (cat.name.toLowerCase().includes('proveedor') || cat.name.toLowerCase().includes('subcontrat')) {
+                return manualSpent + totalSupplierCosts;
+            }
+            return manualSpent;
+        };
+
         const totalAllocated = budgetCategories.reduce((acc, cat) => acc + cat.allocated, 0);
-        const totalSpent = expenses.reduce((acc, exp) => acc + exp.amount, 0);
+        const totalSpent = budgetCategories.reduce((acc, cat) => acc + getCategorySpentLocal(cat), 0);
         const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
         const expenseChartData = budgetCategories.map(cat => ({
             name: cat.name,
-            value: expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0)
+            value: getCategorySpentLocal(cat)
         })).filter(d => d.value > 0);
 
         return (
@@ -231,7 +265,7 @@ const Reports: React.FC = () => {
                     <thead><tr className="border-b bg-gray-50"><th className="p-2">Categoría</th><th className="p-2">Asignado</th><th className="p-2">Gastado</th><th className="p-2">Restante</th></tr></thead>
                     <tbody>
                         {budgetCategories.map(cat => {
-                            const spent = expenses.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
+                            const spent = getCategorySpentLocal(cat);
                             return (<tr key={cat.id} className="border-b"><td className="p-2">{cat.name}</td><td className="p-2">${cat.allocated.toLocaleString()}</td><td className="p-2">${spent.toLocaleString()}</td><td className="p-2">${(cat.allocated - spent).toLocaleString()}</td></tr>);
                         })}
                     </tbody>
