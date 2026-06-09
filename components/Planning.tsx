@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Task, Worker, Photo, Material, TaskMaterial } from '../types';
+import { Task, Worker, Photo, Material, TaskMaterial, TaskSupplier } from '../types';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
 import ConfirmModal from './ui/ConfirmModal';
@@ -10,8 +10,8 @@ import { useProject } from '../contexts/ProjectContext';
 import { addDays, format, differenceInDays, startOfWeek, addWeeks, addMonths, endOfWeek } from 'date-fns';
 
 type TimeScale = 'day' | 'week' | 'month';
-type TaskModalTab = 'general' | 'labor' | 'materials';
-type MainViewTab = 'cronograma' | 'destajos' | 'materiales';
+type TaskModalTab = 'general' | 'labor' | 'materials' | 'suppliers';
+type MainViewTab = 'cronograma' | 'destajos' | 'materiales' | 'suppliers';
 
 const GanttChart: React.FC<{ 
     tasks: Task[]; 
@@ -208,6 +208,13 @@ const Planning: React.FC = () => {
     const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
     const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, id: string | null, name: string}>({isOpen: false, id: null, name: ''});
 
+    // Supplier temporary states for modal input
+    const [supName, setSupName] = useState('');
+    const [supConcept, setSupConcept] = useState('');
+    const [supAmount, setSupAmount] = useState<number | ''>('');
+    const [supStatus, setSupStatus] = useState<'Pendiente' | 'Anticipado' | 'Liquidado'>('Pendiente');
+    const [supNotes, setSupNotes] = useState('');
+
     const filteredTasks = useMemo(() => {
         const base = listFilter === 'base' ? tasks.filter(t => !t.isExtraordinary) :
                      listFilter === 'extraordinary' ? tasks.filter(t => t.isExtraordinary) : tasks;
@@ -218,7 +225,11 @@ const Planning: React.FC = () => {
         if (!canEdit) return;
         setActiveModalTab('general');
         if (task) {
-            setCurrentTask({ ...task, materialAssignments: task.materialAssignments || [] });
+            setCurrentTask({ 
+                ...task, 
+                materialAssignments: task.materialAssignments || [],
+                supplierAssignments: task.supplierAssignments || []
+            });
             setIsEditing(true);
         } else {
             setCurrentTask({ 
@@ -226,6 +237,7 @@ const Planning: React.FC = () => {
                 startDate: format(new Date(), 'yyyy-MM-dd'), 
                 endDate: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
                 materialAssignments: [],
+                supplierAssignments: [],
                 totalVolume: 0,
                 completedVolume: 0,
                 unitPrice: 0,
@@ -234,7 +246,42 @@ const Planning: React.FC = () => {
             });
             setIsEditing(false);
         }
+        
+        // Reset dynamic supplier modal inputs
+        setSupName('');
+        setSupConcept('');
+        setSupAmount('');
+        setSupStatus('Pendiente');
+        setSupNotes('');
+        
         setIsModalOpen(true);
+    };
+
+    const handleAddSupplierCost = () => {
+        if (!supName || !supConcept || !supAmount) return;
+        const newAssignment: TaskSupplier = {
+            id: `sup-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+            name: supName,
+            concept: supConcept,
+            amount: Number(supAmount),
+            status: supStatus,
+            notes: supNotes
+        };
+        const assignments = [...(currentTask.supplierAssignments || [])];
+        assignments.push(newAssignment);
+        setCurrentTask({ ...currentTask, supplierAssignments: assignments });
+        
+        // Reset fields
+        setSupName('');
+        setSupConcept('');
+        setSupAmount('');
+        setSupStatus('Pendiente');
+        setSupNotes('');
+    };
+
+    const handleRemoveSupplierCost = (id: string) => {
+        const assignments = (currentTask.supplierAssignments || []).filter(s => s.id !== id);
+        setCurrentTask({ ...currentTask, supplierAssignments: assignments });
     };
 
     const handleSave = async () => {
@@ -308,6 +355,7 @@ const Planning: React.FC = () => {
                 <button onClick={() => setMainTab('cronograma')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'cronograma' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>Cronograma</button>
                 <button onClick={() => setMainTab('destajos')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'destajos' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>Mano de Obra</button>
                 <button onClick={() => setMainTab('materiales')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'materiales' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>Materiales</button>
+                <button onClick={() => setMainTab('suppliers')} className={`flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${mainTab === 'suppliers' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500'}`}>Proveedores</button>
             </div>
 
             <div className="flex border-b border-gray-200 no-print overflow-x-auto">
@@ -462,12 +510,76 @@ const Planning: React.FC = () => {
                 </Card>
             )}
 
+            {mainTab === 'suppliers' && (
+                <Card>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 text-black border-b pb-4">
+                        <div>
+                            <h3 className="text-xl font-bold">Montos Unificados de Proveedores</h3>
+                            <p className="text-xs text-gray-500 font-medium">Gestión de subcontratos y pagos fijos de proveedores asociados a las actividades</p>
+                        </div>
+                        <div className="text-right bg-slate-50 p-3 rounded-lg border border-slate-100 min-w-[240px]">
+                            <p className="text-[10px] text-gray-400 uppercase font-black">Costo Comprometido de Proveedores</p>
+                            <p className="text-2xl font-black text-primary-600">
+                                ${tasks.reduce((sum, t) => sum + (t.supplierAssignments || []).reduce((subSum, s) => subSum + (s.amount || 0), 0), 0).toLocaleString()}
+                            </p>
+                            <div className="flex justify-between text-[10px] text-gray-500 font-bold mt-1 pt-1 border-t">
+                                <span>Liquidado: ${tasks.reduce((sum, t) => sum + (t.supplierAssignments || []).filter(s => s.status === 'Liquidado').reduce((subSum, s) => subSum + (s.amount || 0), 0), 0).toLocaleString()}</span>
+                                <span>Pendiente: ${tasks.reduce((sum, t) => sum + (t.supplierAssignments || []).filter(s => s.status !== 'Liquidado').reduce((subSum, s) => subSum + (s.amount || 0), 0), 0).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-black">
+                            <thead>
+                                <tr className="bg-slate-50 border-b font-bold uppercase text-[11px] text-gray-500">
+                                    <th className="p-3">Actividad Relacionada</th>
+                                    <th className="p-3">Proveedor / Contratista</th>
+                                    <th className="p-3">Concepto Contratado</th>
+                                    <th className="p-3">Estado de Pago</th>
+                                    <th className="p-3 text-right">Monto Fijo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {tasks.filter(t => t.supplierAssignments && t.supplierAssignments.length > 0).flatMap(task => 
+                                    (task.supplierAssignments || []).map(sup => (
+                                        <tr key={sup.id} className="border-b hover:bg-slate-50">
+                                            <td className="p-3">
+                                                <p className="font-bold">{task.name}</p>
+                                                {task.isExtraordinary && <span className="text-[9px] bg-orange-100 text-orange-600 px-1 rounded font-black uppercase mt-0.5 inline-block">Extraordinario</span>}
+                                            </td>
+                                            <td className="p-3 font-semibold text-slate-800">{sup.name}</td>
+                                            <td className="p-3 text-slate-600">{sup.concept}</td>
+                                            <td className="p-3">
+                                                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                                                    sup.status === 'Liquidado' ? 'bg-green-100 text-green-700' :
+                                                    sup.status === 'Anticipado' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-yellow-100 text-yellow-700'
+                                                }`}>
+                                                    {sup.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-right font-black text-slate-900">${(sup.amount || 0).toLocaleString()}</td>
+                                        </tr>
+                                    ))
+                                )}
+                                {tasks.filter(t => t.supplierAssignments && t.supplierAssignments.length > 0).length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="p-8 text-center text-gray-400 italic">No tienes montos unificados de proveedores registrados. Entra a editar o gestionar cualquier tarea y agrégalos en su pestaña de "Proveedores".</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`${isEditing ? 'Gestionar' : 'Nueva'} Tarea`}>
                 <div className="space-y-6">
-                    <div className="flex border-b">
-                        {(['general', 'labor', 'materials'] as TaskModalTab[]).map(tab => (
-                            <button key={tab} onClick={() => setActiveModalTab(tab)} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all ${activeModalTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-400'}`}>
-                                {tab === 'general' ? 'Información' : tab === 'labor' ? 'Cuantificación' : 'Insumos'}
+                    <div className="flex border-b overflow-x-auto">
+                        {(['general', 'labor', 'materials', 'suppliers'] as TaskModalTab[]).map(tab => (
+                            <button key={tab} onClick={() => setActiveModalTab(tab)} className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all shrink-0 ${activeModalTab === tab ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-400'}`}>
+                                {tab === 'general' ? 'Información' : tab === 'labor' ? 'Cuantificación' : tab === 'materials' ? 'Insumos' : 'Proveedores'}
                             </button>
                         ))}
                     </div>
@@ -524,6 +636,110 @@ const Planning: React.FC = () => {
                                         </div>
                                     );
                                 })}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeModalTab === 'suppliers' && (
+                        <div className="space-y-4">
+                            <div className="p-4 bg-slate-50 border rounded-xl space-y-3 text-black">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Agregar Monto de Proveedor</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Proveedor</label>
+                                        <input 
+                                            type="text" 
+                                            value={supName} 
+                                            onChange={e => setSupName(e.target.value)} 
+                                            className="w-full p-2 border rounded-lg bg-white text-xs font-semibold" 
+                                            placeholder="Ej: Concretos del Norte S.A." 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Concepto contratado</label>
+                                        <input 
+                                            type="text" 
+                                            value={supConcept} 
+                                            onChange={e => setSupConcept(e.target.value)} 
+                                            className="w-full p-2 border rounded-lg bg-white text-xs font-semibold" 
+                                            placeholder="Ej: Suministro de concreto premezclado" 
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Monto Fijo / Unificado ($)</label>
+                                        <input 
+                                            type="number" 
+                                            value={supAmount} 
+                                            onChange={e => setSupAmount(e.target.value === '' ? '' : parseFloat(e.target.value))} 
+                                            className="w-full p-2 border rounded-lg bg-white text-xs font-black text-slate-950" 
+                                            placeholder="Monto global acordado" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Estado de Pago</label>
+                                        <select 
+                                            value={supStatus} 
+                                            onChange={e => setSupStatus(e.target.value as any)} 
+                                            className="w-full p-2 border rounded-lg bg-white text-xs font-bold font-sans"
+                                        >
+                                            <option value="Pendiente">Pendiente</option>
+                                            <option value="Anticipado">Anticipado</option>
+                                            <option value="Liquidado">Liquidado</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Notas Adicionales (Opcional)</label>
+                                    <input 
+                                        type="text" 
+                                        value={supNotes} 
+                                        onChange={e => setSupNotes(e.target.value)} 
+                                        className="w-full p-2 border rounded-lg bg-white text-xs" 
+                                        placeholder="Ej: Suministro completo para losas de cimentación" 
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleAddSupplierCost}
+                                    type="button"
+                                    className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-black text-xs uppercase cursor-pointer hover:bg-black transition-colors"
+                                >
+                                    + Vincular Proveedor con Monto Fijo
+                                </button>
+                            </div>
+
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Montos Vinculados para esta Actividad</h4>
+                                {(currentTask.supplierAssignments || []).map(sup => (
+                                    <div key={sup.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-150 text-black shadow-sm">
+                                        <div className="flex-1 min-w-0 pr-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-sm truncate">{sup.name}</span>
+                                                <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full ${
+                                                    sup.status === 'Liquidado' ? 'bg-green-100 text-green-700' :
+                                                    sup.status === 'Anticipado' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-yellow-105 text-yellow-700'
+                                                }`}>
+                                                    {sup.status}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 truncate mt-0.5">{sup.concept}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-sm font-black text-slate-950">${sup.amount.toLocaleString()}</span>
+                                            <button 
+                                                onClick={() => handleRemoveSupplierCost(sup.id)} 
+                                                className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors border border-transparent hover:border-red-200"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(currentTask.supplierAssignments || []).length === 0 && (
+                                    <p className="text-xs text-gray-400 italic text-center py-4 bg-slate-50 border border-dashed rounded-lg">No hay montos de proveedores asignados a esta actividad.</p>
+                                )}
                             </div>
                         </div>
                     )}

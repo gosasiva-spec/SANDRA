@@ -36,18 +36,29 @@ const Budget: React.FC = () => {
         }, 0);
     }, [tasks]);
 
-    // Función para obtener el gasto real de una categoría (Gasto manual + Destajo si es Mano de Obra)
+    // CÁLCULO DINÁMICO DE PROVEEDORES (Montos Unificados de Proveedores)
+    const totalSupplierCosts = useMemo(() => {
+        return tasks.reduce((sum, task) => {
+            return sum + (task.supplierAssignments || []).reduce((subSum, s) => subSum + (s.amount || 0), 0);
+        }, 0);
+    }, [tasks]);
+
+    // Función para obtener el gasto real de una categoría (Gasto manual + Destajo si es Mano de Obra o Proveedor si corresponde)
     const getCategorySpent = (category: BudgetCategory) => {
         const manualSpent = expenses.filter(e => e.categoryId === category.id).reduce((sum, e) => sum + e.amount, 0);
         // Si la categoría es "Mano de Obra" (detectado por nombre), sumamos lo producido en planificación
         if (category.name.toLowerCase().includes('mano de obra') || category.name.toLowerCase().includes('labor')) {
             return manualSpent + totalProducedLabor;
         }
+        // Si la categoría es de Proveedores o Subcontratos, sumamos los montos unificados de proveedores
+        if (category.name.toLowerCase().includes('proveedor') || category.name.toLowerCase().includes('subcontrat')) {
+            return manualSpent + totalSupplierCosts;
+        }
         return manualSpent;
     };
 
     const totalAllocated = useMemo(() => budgetCategories.reduce((acc, cat) => acc + cat.allocated, 0), [budgetCategories]);
-    const totalSpent = useMemo(() => budgetCategories.reduce((acc, cat) => acc + getCategorySpent(cat), 0), [budgetCategories, expenses, totalProducedLabor]);
+    const totalSpent = useMemo(() => budgetCategories.reduce((acc, cat) => acc + getCategorySpent(cat), 0), [budgetCategories, expenses, totalProducedLabor, totalSupplierCosts]);
     
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
     
@@ -144,10 +155,11 @@ const Budget: React.FC = () => {
                         <p className="text-4xl font-black">${totalAllocated.toLocaleString()}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Ejecutado (Gastos + Destajos)</p>
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Ejecutado (Gastos + Destajos + Proveedores)</p>
                         <p className="text-4xl font-black text-blue-400">${totalSpent.toLocaleString()}</p>
-                        <div className="mt-2 text-[10px] font-bold text-slate-500 uppercase">
-                            Incluye ${totalProducedLabor.toLocaleString()} en destajos de obra
+                        <div className="mt-2 text-[10px] font-bold text-slate-500 uppercase flex flex-col gap-0.5">
+                            <span>Mano de obra (destajos): ${totalProducedLabor.toLocaleString()}</span>
+                            <span>Subcontratos (proveedores): ${totalSupplierCosts.toLocaleString()}</span>
                         </div>
                     </div>
                     <div>
@@ -169,14 +181,16 @@ const Budget: React.FC = () => {
                             {budgetCategories.map(cat => {
                                 const spent = getCategorySpent(cat);
                                 const isLabor = cat.name.toLowerCase().includes('mano de obra');
+                                const isSupplier = cat.name.toLowerCase().includes('proveedor') || cat.name.toLowerCase().includes('subcontrat');
                                 const progress = (spent / cat.allocated) * 100;
                                 
                                 return (
                                     <div key={cat.id} className="p-4 border rounded-xl hover:shadow-md transition-shadow cursor-pointer group" onClick={() => handleOpenCategoryModal(cat)}>
                                         <div className="flex justify-between items-start mb-2">
-                                            <h4 className="font-bold text-black group-hover:text-primary-600 transition-colors">
-                                                {cat.name}
-                                                {isLabor && <span className="ml-2 text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-black uppercase">Auto-Destajo</span>}
+                                            <h4 className="font-bold text-black group-hover:text-primary-600 transition-colors flex items-center gap-1 flex-wrap">
+                                                <span>{cat.name}</span>
+                                                {isLabor && <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-black uppercase">Auto-Destajo</span>}
+                                                {isSupplier && <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-black uppercase">Auto-Proveedor</span>}
                                             </h4>
                                             <span className="text-[10px] font-black text-gray-400 uppercase">{progress.toFixed(0)}%</span>
                                         </div>
