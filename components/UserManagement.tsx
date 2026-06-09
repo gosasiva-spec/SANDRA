@@ -7,10 +7,11 @@ import ConfirmModal from './ui/ConfirmModal';
 import { useProject } from '../contexts/ProjectContext';
 
 const UserManagement: React.FC = () => {
-    const { allUsers, addUser, updateUser, deleteUser } = useProject();
+    const { allUsers, addUser, updateUser, deleteUser, projects, updateProject } = useProject();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentUser, setCurrentUser] = useState<Partial<User>>({});
     const [isEditing, setIsEditing] = useState(false);
+    const [assignedProjectIds, setAssignedProjectIds] = useState<string[]>([]);
     const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, id: string | null, name: string}>({isOpen: false, id: null, name: ''});
     const [validationError, setValidationError] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
@@ -20,14 +21,20 @@ const UserManagement: React.FC = () => {
         if (user) {
             setCurrentUser(user);
             setIsEditing(true);
+            const initialProjectIds = projects
+                .filter(p => p.collaboratorIds && p.collaboratorIds.includes(user.id))
+                .map(p => p.id);
+            setAssignedProjectIds(initialProjectIds);
         } else {
             setCurrentUser({
+                id: `user-${Date.now()}`,
                 role: 'user', 
                 name: '',
                 email: '',
                 password: ''
             });
             setIsEditing(false);
+            setAssignedProjectIds([]);
         }
         setIsModalOpen(true);
     };
@@ -46,6 +53,8 @@ const UserManagement: React.FC = () => {
         setValidationError('');
         
         try {
+            const finalUserId = currentUser.id || `user-${Date.now()}`;
+            
             if (isEditing) {
                 await updateUser(currentUser.id!, currentUser);
             } else {
@@ -54,9 +63,24 @@ const UserManagement: React.FC = () => {
                     setIsSaving(false);
                     return;
                 }
-                const newUser = { ...currentUser, id: `user-${Date.now()}` } as User;
+                const newUser = { ...currentUser, id: finalUserId } as User;
                 await addUser(newUser);
             }
+
+            // Actualizar asignaciones de proyecto (collaboratorIds) para el usuario
+            for (const project of projects) {
+                const isCurrentlyCollaborator = project.collaboratorIds && project.collaboratorIds.includes(finalUserId);
+                const shouldBeCollaborator = assignedProjectIds.includes(project.id);
+                
+                if (shouldBeCollaborator && !isCurrentlyCollaborator) {
+                    const newCollaborators = [...(project.collaboratorIds || []), finalUserId];
+                    await updateProject(project.id, { collaboratorIds: newCollaborators });
+                } else if (!shouldBeCollaborator && isCurrentlyCollaborator) {
+                    const newCollaborators = (project.collaboratorIds || []).filter(id => id !== finalUserId);
+                    await updateProject(project.id, { collaboratorIds: newCollaborators });
+                }
+            }
+
             setIsModalOpen(false);
         } catch (error: any) {
             setValidationError(`Error al guardar el usuario: ${error.message || 'Error desconocido'}`);
@@ -77,6 +101,14 @@ const UserManagement: React.FC = () => {
         if (deleteConfirmation.id) {
             try {
                 await deleteUser(deleteConfirmation.id);
+                
+                // Desvincular de todos los proyectos tras eliminarlo
+                for (const project of projects) {
+                    if (project.collaboratorIds && project.collaboratorIds.includes(deleteConfirmation.id)) {
+                        const newCollaborators = project.collaboratorIds.filter(id => id !== deleteConfirmation.id);
+                        await updateProject(project.id, { collaboratorIds: newCollaborators });
+                    }
+                }
             } catch (error: any) {
                 alert(`Error al eliminar usuario: ${error.message}`);
             }
@@ -97,18 +129,19 @@ const UserManagement: React.FC = () => {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
-                            <tr className="border-b bg-gray-50">
+                            <tr className="border-b bg-gray-50 text-sm font-bold text-gray-700">
                                 <th className="p-3">Nombre</th>
                                 <th className="p-3">Email</th>
                                 <th className="p-3">Rol</th>
+                                <th className="p-3">Proyectos Con Permiso</th>
                                 <th className="p-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             {allUsers.map(user => (
-                                <tr key={user.id} className="border-b hover:bg-gray-50">
-                                    <td className="p-3 font-medium">{user.name}</td>
-                                    <td className="p-3">{user.email}</td>
+                                <tr key={user.id} className="border-b hover:bg-gray-50 text-sm">
+                                    <td className="p-3 font-medium text-black">{user.name}</td>
+                                    <td className="p-3 text-slate-650">{user.email}</td>
                                     <td className="p-3">
                                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                                             user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
@@ -117,6 +150,22 @@ const UserManagement: React.FC = () => {
                                         }`}>
                                             {user.role === 'admin' ? 'Administrador' : user.role === 'user' ? 'Editor' : 'Visualizador'}
                                         </span>
+                                    </td>
+                                    <td className="p-3">
+                                        {user.role === 'admin' ? (
+                                            <span className="text-xs text-gray-400 italic">Todos (Acceso Total)</span>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-1 max-w-[280px]">
+                                                {projects.filter(p => p.collaboratorIds && p.collaboratorIds.includes(user.id)).map(p => (
+                                                    <span key={p.id} className="bg-slate-100 border border-slate-200 text-slate-700 text-[10px] px-1.5 py-0.5 rounded font-bold max-w-[130px] truncate" title={p.name}>
+                                                        {p.name}
+                                                    </span>
+                                                ))}
+                                                {projects.filter(p => p.collaboratorIds && p.collaboratorIds.includes(user.id)).length === 0 && (
+                                                    <span className="text-xs text-gray-400 italic">Ningún proyecto asignado</span>
+                                                )}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="p-3 whitespace-nowrap">
                                         <button onClick={() => handleOpenModal(user)} className="text-black hover:text-gray-600 font-medium">Editar</button>
@@ -149,10 +198,42 @@ const UserManagement: React.FC = () => {
                         <label className="text-sm font-medium text-black">Rol</label>
                         <select value={currentUser.role || 'user'} onChange={e => setCurrentUser({...currentUser, role: e.target.value as any})} className="w-full p-2 border rounded bg-white text-black">
                             <option value="admin">Administrador (Acceso Total)</option>
-                            <option value="user">Editor (Gestión de Proyecto, sin CRM/Usuarios)</option>
+                            <option value="user">Editor (Gestión de Proyecto)</option>
                             <option value="viewer">Visualizador (Solo Lectura)</option>
                         </select>
                     </div>
+
+                    {currentUser.role !== 'admin' && (
+                        <div className="space-y-2 border-t pt-3">
+                            <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Proyectos Asignados</label>
+                            <p className="text-[11px] text-gray-400">Asigna los proyectos a los que este usuario tendría de acceso {currentUser.role === 'user' ? 'edición' : 'visualización'}.</p>
+                            <div className="max-h-40 overflow-y-auto border rounded p-2 bg-slate-50 space-y-1.5">
+                                {projects.map(project => {
+                                    const isChecked = assignedProjectIds.includes(project.id);
+                                    return (
+                                        <label key={project.id} className="flex items-center gap-2 text-xs text-black cursor-pointer font-medium p-1 hover:bg-white rounded transition-colors">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={isChecked} 
+                                                onChange={e => {
+                                                    if (e.target.checked) {
+                                                        setAssignedProjectIds([...assignedProjectIds, project.id]);
+                                                    } else {
+                                                        setAssignedProjectIds(assignedProjectIds.filter(id => id !== project.id));
+                                                    }
+                                                }}
+                                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                            />
+                                            <span className="truncate">{project.name}</span>
+                                        </label>
+                                    );
+                                })}
+                                {projects.length === 0 && (
+                                    <p className="text-xs text-gray-400 italic">No hay proyectos disponibles.</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {validationError && <p className="text-red-600 text-sm">{validationError}</p>}
                     <button onClick={handleSaveUser} disabled={isSaving} className="w-full py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:bg-gray-400">
