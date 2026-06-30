@@ -172,7 +172,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   useEffect(() => {
     if (!isReady) return;
     let projectsForCurrentUser = allProjects;
-    if (currentUser.role !== 'admin' && currentUser.role !== 'viewer') {
+    if (currentUser.role !== 'admin') {
          projectsForCurrentUser = allProjects.filter(p => p.ownerId === currentUser.id || (p.collaboratorIds && p.collaboratorIds.includes(currentUser.id)));
     }
     if (projectsForCurrentUser.length > 0 && !activeProjectId) {
@@ -275,7 +275,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
   };
 
   const shareProject = async (projectId: string, email: string) => {
-    const userToShare = allUsers.find(u => u.email === email);
+    const userToShare = allUsers.find(u => u.email.trim().toLowerCase() === email.trim().toLowerCase());
     if (!userToShare) throw new Error("No se encontró ningún usuario con ese correo.");
     const projectToShare = allProjects.find(p => p.id === projectId);
     if (!projectToShare) throw new Error("Proyecto no encontrado");
@@ -392,7 +392,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode; currentUser: User 
 
   const activeProject = allProjects.find(p => p.id === activeProjectId) || null;
   let visibleProjects = allProjects;
-  if (currentUser.role !== 'admin' && currentUser.role !== 'viewer') {
+  if (currentUser.role !== 'admin') {
       visibleProjects = allProjects.filter(p => p.ownerId === currentUser.id || (p.collaboratorIds && p.collaboratorIds.includes(currentUser.id)));
   }
 

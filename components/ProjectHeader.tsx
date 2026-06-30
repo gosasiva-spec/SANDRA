@@ -13,7 +13,7 @@ interface ProjectHeaderProps {
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({ onLogout, currentUser, isManageModalOpen, setIsManageModalOpen }) => {
-    const { activeProject, projects, switchProject, createProject, updateProject, deleteProject, activeProjectId, shareProject } = useProject();
+    const { activeProject, projects, switchProject, createProject, updateProject, deleteProject, activeProjectId, shareProject, allUsers } = useProject();
     
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     
@@ -311,11 +311,16 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({ onLogout, currentUser, is
                             <div className="mt-4 pt-4 border-t">
                                 <h4 className="font-semibold mb-2">Colaboradores Actuales:</h4>
                                 <ul className="list-disc list-inside text-sm text-gray-700">
-                                    {projectToShare.collaboratorIds.map(uid => (
-                                        <li key={uid}>ID Usuario: {uid}</li> 
-                                    ))}
+                                    {projectToShare.collaboratorIds.map(uid => {
+                                        const user = allUsers.find(u => u.id === uid);
+                                        return (
+                                            <li key={uid}>
+                                                {user ? `${user.name} (${user.email})` : `ID Usuario: ${uid}`}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
-                                <p className="text-xs text-gray-400 mt-1">* Para gestionar o eliminar colaboradores, contacte al soporte (funcionalidad avanzada).</p>
+                                <p className="text-xs text-gray-400 mt-1">* Para gestionar o eliminar colaboradores, utiliza la pestaña de "Usuarios".</p>
                             </div>
                         )}
                     </div>
